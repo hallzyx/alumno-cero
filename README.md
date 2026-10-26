@@ -31,7 +31,7 @@ Entrega para **Órbita LATAM · Reto Calentamiento (1K)** · Categoría *Educati
 
 Con la key de OpenRouter en `.env`, la IA hace el trabajo principal; sin key (o si falla) entra el **modo básico** local:
 
-1. **Análisis (`/api/analyze`):** un LLM decide, para cada idea del tema, si el estudiante la dijo bien, mal o no la dijo. Debe citar un fragmento literal de su texto.
+1. **Análisis (`/api/analyze`):** un LLM decide, para cada idea del tema, si el estudiante la dijo bien, mal o no la dijo (con una cita literal de su texto) y, en la voz de Cero, redacta lo que entendió, por qué se equivocó, qué no le dijeron y sus dudas. Todo texto generado se valida (sin cifras inventadas, sin enlaces, preguntas bien formadas) y, si no pasa, se usa el texto base del tema.
 2. **Examen (`/api/exam`):** Cero (el LLM) resuelve un problema nuevo usando solo lo que el estudiante enseñó; las ideas faltantes o erróneas se aplican como suposición/error.
 3. **Contra alucinaciones:** temperatura 0, salida JSON cerrada, lista cerrada de ideas, el modelo nunca ve la respuesta correcta, y el servidor valida todo: la cita debe existir palabra por palabra en el texto (si no, la idea cuenta como no dicha), y la aritmética/respuesta se verifica contra el solver del tema (`src/lib/topics.js`). Si no valida tras 2 intentos, se usa el motor determinista (`src/lib/engine.js`) y la UI lo indica.
 4. **Extras:** dictado por voz (`/api/transcribe`, `OPENROUTER_VOICE_MODEL`) y «Cero con IA» (`/api/cero`), un comentario en personaje. Los modelos de texto usan `OPENROUTER_WRITING_MODEL`.

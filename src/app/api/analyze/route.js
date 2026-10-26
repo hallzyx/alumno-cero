@@ -1,21 +1,21 @@
 import { chat, config, OpenRouterError, parseJson } from "@/lib/openrouter";
 import { analysisMessages, validateAnalysis } from "@/lib/ai-grading";
 import { splitSentences } from "@/lib/engine";
-import { getTopic } from "@/lib/topics";
+import { LEVELS, getTopic } from "@/lib/topics";
 
 export const dynamic = "force-dynamic";
 
 // POST { topicId, text } -> { analysis } (same shape as engine.analyze) | { error, fallback:true }
 export async function POST(req) {
   try {
-    const { topicId, text } = await req.json();
+    const { topicId, text, level } = await req.json();
     const topic = getTopic(topicId);
     const clean = String(text ?? "").slice(0, 4000);
     if (!topic || !clean.trim()) return Response.json({ error: "Solicitud inválida." }, { status: 400 });
-    const messages = analysisMessages(topic, splitSentences(clean));
+    const messages = analysisMessages(topic, splitSentences(clean), LEVELS[level]);
 
     for (let attempt = 0; attempt < 2; attempt++) {
-      const reply = await chat({ model: config().writingModel, messages, temperature: 0, max_tokens: 900, json: true });
+      const reply = await chat({ model: config().writingModel, messages, temperature: 0, max_tokens: 1800, json: true });
       const analysis = validateAnalysis(topic, clean, parseJson(reply));
       if (analysis) return Response.json({ analysis, model: config().writingModel });
     }

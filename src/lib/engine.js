@@ -109,7 +109,7 @@ export function reflect(topic, analysis) {
     return {
       conceptId: c.id,
       state,
-      understood: state === "known" ? c.understood : state === "wrong" ? ev.misconception.cero : null,
+      understood: state === "known" ? ev?.understood ?? c.understood : state === "wrong" ? ev.misconception.cero : null,
       quote: ev ? ev.sentence : null,
     };
   });
@@ -117,6 +117,8 @@ export function reflect(topic, analysis) {
 
 /** Naive questions Cero asks about what is missing or shaky, by level. */
 export function questionsFor(topic, analysis, level = "companero", max = 2) {
+  // When the AI wrote Cero's doubts, use them (already validated); otherwise the topic's canned questions.
+  if (analysis.doubts?.length) return analysis.doubts.slice(0, max);
   const out = [];
   for (const c of topic.concepts) {
     if (analysis.states[c.id] === "known") continue;
@@ -150,7 +152,7 @@ export function buildBlame(topic, analysis, conceptId, result) {
     conceptLabel: concept.label,
     state, // "wrong" | "missing"
     sentence: state === "wrong" ? ev.sentence : null,
-    message: state === "wrong" ? ev.misconception.explain : concept.gap,
+    message: state === "wrong" ? ev.misconception.explain : analysis.gaps?.[conceptId] ?? concept.gap,
     alsoFailing: [...new Set(others)],
   };
 }

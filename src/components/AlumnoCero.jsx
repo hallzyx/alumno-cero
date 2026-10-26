@@ -286,7 +286,7 @@ export default function AlumnoCero() {
       let analysis = { ...local, log: { ...local.log, fallback: true } };
       try {
         const [r] = await Promise.all([
-          fetch("/api/analyze", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ topicId: topic.id, text: state.text }) }),
+          fetch("/api/analyze", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ topicId: topic.id, text: state.text, level: state.level }) }),
           new Promise((res) => setTimeout(res, 900)),
         ]);
         const j = await r.json();
@@ -673,7 +673,7 @@ export default function AlumnoCero() {
       return (
         <section aria-labelledby="h-reflect">
           <div className="cero-row cero-row-title"><Cero mood={qs.length ? "curioso" : "feliz"} cls="cero-lg" /><h1 id="h-reflect">Esto es lo que entendí</h1></div>
-          {state.analysis.log?.ai && <p className="note"><I as={Sparkles} size={16} /> Analizado con IA ({ai.writingModel}). Cada cita es una frase tuya, verificada palabra por palabra.</p>}
+          {state.analysis.log?.ai && <p className="note"><I as={Sparkles} size={16} /> Analizado con IA ({ai.writingModel}). Cero escribió lo que entendió y sus dudas con IA, usando solo tus frases (cada cita se verifica palabra por palabra).</p>}
           {state.analysis.log?.fallback && <p className="note">La IA no respondió bien, así que usé el análisis básico de tu dispositivo.</p>}
           <ul className="understood" data-testid="understood">
             {refl.map((r) => (
