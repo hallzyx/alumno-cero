@@ -22,6 +22,31 @@ const STEPS = ["welcome", "auth", "hub", "goal", "frictions", "prefs", "teach", 
 const STEP_LABEL = { welcome: "Inicio", auth: "Tu cuenta", hub: "Mi hub", goal: "Elige tu tema", frictions: "¿Qué te cuesta?", prefs: "Ajusta a Cero", teach: "Enséñale", reading: "Cero está leyendo", reflect: "Cero te cuenta", exam: "El examen de Cero", result: "Resultado", practice: "Mini-práctica", card: "Tu ficha" };
 const PROGRESS = { welcome: 0, auth: 0, hub: 0, goal: 1, frictions: 2, prefs: 3, teach: 4, reading: 5, reflect: 5, exam: 6, result: 7, practice: 7, card: 8 };
 const TOTAL = 8;
+
+// Every screen has its own URL: /hub, /temas, /aprender/<tema>/<paso>…
+const SLUG = { frictions: "dificultades", prefs: "ajustes", teach: "ensenar", reading: "leyendo", reflect: "cero-responde", exam: "examen", result: "resultado", practice: "practica", card: "ficha" };
+const SCREEN_OF = Object.fromEntries(Object.entries(SLUG).map(([k, v]) => [v, k]));
+function pathFor(screen, topicId) {
+  if (screen === "welcome") return "/";
+  if (screen === "auth") return "/cuenta";
+  if (screen === "hub") return "/hub";
+  if (screen === "goal") return "/temas";
+  return topicId && SLUG[screen] ? `/aprender/${topicId}/${SLUG[screen]}` : "/";
+}
+function parsePath(path) {
+  const parts = path.replace(/\/+$/, "").split("/").filter(Boolean);
+  if (parts.length === 0) return { screen: "welcome" };
+  if (parts.length === 1 && ["cuenta", "hub", "temas"].includes(parts[0])) return { screen: { cuenta: "auth", hub: "hub", temas: "goal" }[parts[0]] };
+  if (parts.length === 3 && parts[0] === "aprender" && getTopic(parts[1]) && SCREEN_OF[parts[2]]) return { screen: SCREEN_OF[parts[2]], topicId: parts[1] };
+  return null; // unknown URL: stay where we are
+}
+// Apply a URL to a state. A different topic in the URL means starting that topic.
+function withUrl(s, parsed) {
+  if (parsed.topicId && parsed.topicId !== s.topicId) {
+    return { ...initialState(), level: s.level, topicId: parsed.topicId, sid: crypto.randomUUID(), locked: true, screen: "goal" };
+  }
+  return { ...s, screen: parsed.screen };
+}
 // One icon + short name per station of the path (stations 1..8).
 const STATIONS = [
   { icon: Target, name: "Tema" },
@@ -86,6 +111,7 @@ export default function AlumnoCero() {
   const [learner, setLearner] = useState(null); // signed-in account (null = anonymous / local only)
   const [dbOk, setDbOk] = useState(true);
   const [reward, setReward] = useState(null);
+  const [ready, setReady] = useState(false); // account + URL resolved
   const pending = useRef(false);
   const syncTimer = useRef(null);
   const rec = useRef(null);
@@ -99,21 +125,32 @@ export default function AlumnoCero() {
   const subject = subjectOf(topic);
 
   useEffect(() => {
-    setState(load());
     setSrOk(Boolean(SR));
     setHydrated(true);
     fetch("/api/status").then((r) => r.json()).then(setAi).catch(() => {});
-    fetch("/api/me")
-      .then(async (r) => {
+    (async () => {
+      let base = load();
+      let who = null;
+      let db = true;
+      try {
+        const r = await fetch("/api/me");
         const j = await r.json().catch(() => ({}));
-        if (r.status === 503 || j.dbOk === false) return setDbOk(false);
-        if (j.learner) {
-          setLearner(j.learner);
+        if (r.status === 503 || j.dbOk === false) db = false;
+        else if (j.learner) {
+          who = j.learner;
           // When signed in, the database is the source of truth.
-          setState(j.state ? { ...initialState(), ...j.state } : { ...initialState(), screen: "hub" });
+          base = j.state ? { ...initialState(), ...j.state } : { ...initialState(), screen: "hub" };
         }
-      })
-      .catch(() => setDbOk(false));
+      } catch { db = false; }
+      setDbOk(db);
+      setLearner(who);
+      const parsed = parsePath(location.pathname);
+      let next = base;
+      if (parsed?.screen === "welcome") next = { ...base, screen: who ? "hub" : "welcome" };
+      else if (parsed) next = withUrl(base, parsed);
+      setState(next);
+      setReady(true);
+    })();
   }, []);
 
   useEffect(() => {
@@ -148,7 +185,7 @@ export default function AlumnoCero() {
 
   // Guards: never render a screen whose data is missing (e.g. after a corrupted/partial save).
   let screen = STEPS.includes(state.screen) ? state.screen : "welcome";
-  if (screen === "hub" && !learner) screen = "welcome";
+  if (screen === "hub" && !learner) screen = ready && dbOk ? "auth" : "welcome";
   const need = { reading: "analysis", reflect: "analysis", exam: "exam", result: "exam", practice: "practice", card: "mastered" };
   if (["frictions", "prefs", "teach"].includes(screen) && !state.topicId) screen = "welcome";
   else if (need[screen] && !state[need[screen]]) screen = state.topicId ? "teach" : "welcome";
@@ -157,6 +194,21 @@ export default function AlumnoCero() {
     if (lastScreen.current && lastScreen.current !== screen) mainRef.current?.querySelector("h1")?.focus({ preventScroll: true });
     lastScreen.current = screen;
   }, [screen]);
+
+  useEffect(() => {
+    if (!ready) return;
+    const want = pathFor(screen, state.topicId);
+    if (location.pathname !== want) history[screen === "reading" ? "replaceState" : "pushState"](null, "", want);
+  }, [screen, state.topicId, ready]);
+
+  useEffect(() => {
+    const onPop = () => {
+      const parsed = parsePath(location.pathname);
+      if (parsed) setState((s) => (parsed.screen === "welcome" && learner ? { ...s, screen: "hub" } : withUrl(s, parsed)));
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, [learner]);
 
   useEffect(() => {
     if (screen !== "reading" || pending.current) return;
@@ -203,7 +255,7 @@ export default function AlumnoCero() {
       if (r.ok) { setState({ ...initialState(), ...j.state, sid }); setFlash(null); window.scrollTo({ top: 0 }); }
     },
     startTopic: (topicId) => {
-      setState({ ...initialState(), level: state.level, topicId, sid: crypto.randomUUID(), screen: "goal" });
+      setState({ ...initialState(), level: state.level, topicId, sid: crypto.randomUUID(), locked: true, screen: "goal" });
       setFlash(null);
       window.scrollTo({ top: 0 });
     },
@@ -418,6 +470,14 @@ export default function AlumnoCero() {
       return (
         <section aria-labelledby="h-goal">
           <CeroSays mood="curioso">¡Hola! Soy Cero y no sé nada de nada. ¿Qué me vas a enseñar hoy?</CeroSays>
+          {state.locked && topic ? (
+            <div data-testid="topic-locked">
+              <h1 id="h-goal"><span aria-hidden="true">{topic.emoji}</span> {topic.title}</h1>
+              <p className="lead">{topic.blurb}</p>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => set({ locked: false })} data-testid="change-topic"><I as={RotateCcw} size={18} /> Cambiar de tema</button>
+            </div>
+          ) : (
+            <>
           <h1 id="h-goal">Elige un tema</h1>
           <fieldset className="topics-by-subject" data-testid="topics">
             <legend className="sr-only">Tema</legend>
@@ -438,6 +498,8 @@ export default function AlumnoCero() {
               </div>
             ))}
           </fieldset>
+            </>
+          )}
           <h2>¿Para qué lo quieres aprender?</h2>
           <fieldset className="cards cards-goals" data-testid="goals">
             <legend className="sr-only">Objetivo</legend>
@@ -548,8 +610,12 @@ export default function AlumnoCero() {
           <CeroSays mood={state.attempt > 0 ? "pensando" : "curioso"}><strong>{level.name}:</strong> {level.intro}</CeroSays>
           <h1 id="h-teach">Enséñale: {topic.title}</h1>
           <p className="lead">{topic.starter}</p>
+          <div className="teach-grid">
+          <div className="teach-side">
           <div className={`subject-help subject-${subject.tone}`} data-testid="subject-help"><span className="subject-ico" aria-hidden="true">{subject.mode === "steps" ? <Calculator size={22} strokeWidth={2.5} /> : <FlaskConical size={22} strokeWidth={2.5} />}</span><p><strong>{subject.teach.title}.</strong> {subject.teach.help}</p></div>
           <Mochila topic={topic} onInsert={insertText} />
+          </div>
+          <div className="teach-main">
           {callout && <div className="callout" data-testid="retry-callout"><span className="callout-ico"><I as={Highlighter} /></span><p><strong>Para corregir:</strong> {callout}</p></div>}
           <label htmlFor="explanation" className="label"><I as={PencilLine} size={20} /> Tu explicación</label>
           <div className="starters" role="group" aria-label="Para empezar a escribir">
@@ -574,6 +640,8 @@ export default function AlumnoCero() {
           <div className="aux-row">
             <Btn cls="btn-ghost" onClick={actions.demoText} testid="demo-text" title="Rellena una explicación con un error típico para ver cómo falla Cero"><I as={Lightbulb} size={20} /> Rellenar con una idea incorrecta</Btn>
             <Btn cls="btn-ghost" onClick={actions.goodText} testid="demo-good" title="Rellena una explicación correcta para ver cómo aprueba Cero"><I as={BookCheck} size={20} /> Rellenar con la explicación correcta</Btn>
+          </div>
+        </div>
           </div>
         </section>
       );

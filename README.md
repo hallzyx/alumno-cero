@@ -60,6 +60,9 @@ Bienvenida con resultado a la vista → objetivo (tema + para qué) → friccion
 - **Gamificación:** XP por examen, aprobar, aprobar al primer intento, ficha de dominio, práctica y primer estudio del día; 10 niveles con títulos escolares; racha de días; 10 insignias. Todo se calcula en el servidor y es idempotente (no se puede ganar dos veces el mismo XP).
 - **Materias y experiencia distinta:** *Matemática* (procedimiento paso a paso, simuladores interactivos) y *Ciencias* (causas y porqués, diagramas que se tocan). Cada tema trae su «mochila»: glosario, ejemplo resuelto, truco y simulador/diagrama. 5 temas: interés compuesto, descuentos sucesivos, regla de tres, fotosíntesis y ciclo del agua.
 
+- **Rutas con URL:** `/` (inicio), `/cuenta`, `/hub`, `/temas` y `/aprender/<tema>/<paso>` (`dificultades`, `ajustes`, `ensenar`, `cero-responde`, `examen`, `resultado`, `practica`, `ficha`). Funcionan los botones atrás/adelante y recargar o compartir un enlace directo. Si eliges un tema desde el hub no se vuelve a mostrar la lista de temas.
+- **Escritorio:** hub y «Enséñale» pasan a dos columnas en pantallas anchas.
+
 ## Datos y privacidad
 
 Con cuenta, tu progreso, fichas y texto de los exámenes se guardan en la base de datos. Sin cuenta, solo en `localStorage` (clave `alumno-cero:v1`). La API key de OpenRouter vive solo en el servidor (`.env`).

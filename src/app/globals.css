@@ -841,3 +841,31 @@ blockquote.blame { margin: 0; font-size: clamp(1.25rem, 1.05rem + 1vw, 1.6rem); 
 .toast-x { position: absolute; top: 8px; right: 8px; display: grid; place-items: center; width: 36px; height: 36px; border: 2px solid var(--ink); border-radius: 50%; background: var(--surface); cursor: pointer; }
 .toast-x:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 @media (prefers-reduced-motion: reduce) { .toast, .vz-block.new, .mochila-panel { animation: none; } .xpbar span, .vz-fill { transition: none; } }
+
+/* =====================================================================
+   ESCRITORIO: aprovecha el ancho. Móvil primero; esto solo agranda.
+   ===================================================================== */
+.hub-cols { display: grid; gap: 8px 32px; }
+.teach-grid { display: block; }
+.hub-side > h2:first-child { margin-top: 0; }
+
+@media (min-width: 900px) {
+  #app { max-width: 920px; padding-inline: 28px; }
+  #app[data-screen="welcome"] { max-width: 1120px; }
+  #app[data-screen="hub"], #app[data-screen="goal"], #app[data-screen="teach"] { max-width: 1180px; }
+  .sheet { padding: 32px 40px 36px; }
+}
+
+@media (min-width: 1000px) {
+  .hub-cols { grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); align-items: start; }
+  .hub-main .hub-subjects { grid-template-columns: 1fr; }
+  .hub-side .badge-grid { grid-template-columns: repeat(2, 1fr); }
+  .teach-grid { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 8px 36px; align-items: start; }
+  .teach-side > :first-child { margin-top: 0; }
+  .teach-main > :first-child { margin-top: 0; }
+  #app[data-screen="goal"] .cards-topics { grid-template-columns: repeat(3, 1fr); }
+}
+
+@media (min-width: 1400px) {
+  #app[data-screen="hub"], #app[data-screen="goal"], #app[data-screen="teach"] { max-width: 1280px; }
+}

@@ -50,6 +50,8 @@ export default function Hub({ onContinue, onStartTopic, refreshKey }) {
         <li><Pencil aria-hidden="true" /><strong>{stats.attempts}</strong><span>exámenes</span></li>
       </ul>
 
+      <div className="hub-cols">
+      <div className="hub-main">
       {inProgress && (
         <div className="hub-continue">
           <p><strong>Sigues con:</strong> {getTopic(inProgress.topicId).emoji} {getTopic(inProgress.topicId).title}</p>
@@ -87,6 +89,8 @@ export default function Hub({ onContinue, onStartTopic, refreshKey }) {
         })}
       </div>
 
+      </div>
+      <aside className="hub-side">
       <h2>Insignias <small>{earned.size}/{Object.keys(BADGES).length}</small></h2>
       <ul className="badge-grid" data-testid="badges">
         {Object.entries(BADGES).map(([code, b]) => {
@@ -129,6 +133,8 @@ export default function Hub({ onContinue, onStartTopic, refreshKey }) {
           </ul>
         </>
       )}
+      </aside>
+      </div>
     </section>
   );
 }

@@ -3,6 +3,7 @@ const KEY = "alumno-cero:v1";
 
 export const initialState = () => ({
   v: 1,
+  locked: false,         // topic already chosen (from the hub): skip the topic picker
   sid: null,             // journey id (signed-in users: row in learning_sessions)
   screen: "welcome",
   topicId: null,
