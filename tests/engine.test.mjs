@@ -102,3 +102,50 @@ test("math topics write notebook work; the corrected page ends in the expected a
   }
   assert.equal(correctWork(getTopic("fotosintesis"), getTopic("fotosintesis").variants[0]), null);
 });
+
+test("demo 'wrong idea' exists for every topic and really makes Cero fail with a blamed sentence", async () => {
+  const { DEMO_BAD } = await import("../src/lib/demo.js");
+  for (const t of TOPICS) {
+    const text = DEMO_BAD[t.id];
+    assert.ok(text, `missing demo for ${t.id}`);
+    assert.equal(validateExplanation(t, text).ok, true, t.id);
+    const a = analyze(t, text);
+    const exam = takeExam(t, pickVariant(t, "companero", 0), a);
+    assert.equal(exam.passed, false, t.id);
+    assert.ok(exam.blame?.sentence, `${t.id}: blamed sentence`);
+  }
+});
+
+test("late sign-up: anonymous progress becomes state + attempt/mastered events", async () => {
+  const { buildMigration, hasProgress, mergeRewards, progressSummary } = await import("../src/lib/migrate.js");
+  const sid = "11111111-2222-4333-8444-555555555555";
+  assert.equal(buildMigration({ topicId: null, history: [] }, () => sid), null);
+  assert.equal(hasProgress({ topicId: "fotosintesis", history: [], text: "  " }), false);
+  const exam = { variantId: "b", passed: true };
+  const state = {
+    topicId: "fotosintesis", sid: "not-a-uuid", text: "texto final", analysis: { states: {} }, exam,
+    history: [{ attempt: 1, passed: false, variantId: "a" }, { attempt: 2, passed: true, variantId: "b" }],
+    mastered: { text: "texto final", concepts: ["luz"], at: 1 },
+  };
+  const plan = buildMigration(state, () => sid);
+  assert.equal(plan.sid, sid);
+  assert.equal(plan.snapshot.sid, sid);
+  assert.deepEqual(plan.events.map((e) => e.type), ["attempt", "attempt", "mastered"]);
+  assert.equal(plan.events[0].payload.exam, null);
+  assert.equal(plan.events[0].payload.passed, false);
+  assert.equal(plan.events[1].payload.attemptNo, 2);
+  assert.equal(plan.events[1].payload.exam, exam);
+  assert.equal(plan.events[1].payload.explanation, "texto final");
+  assert.equal(plan.events[2].payload.attempts, 2);
+  assert.match(progressSummary(state, "Fotosíntesis"), /ficha de dominio y 2 exámenes/);
+  const merged = mergeRewards([
+    { gained: 10, lines: [{ label: "Examen hecho", xp: 10 }], level: { n: 1 }, levelUp: false, newBadges: [] },
+    null,
+    { gained: 30, lines: [{ label: "Examen hecho", xp: 10 }, { label: "¡Cero aprobó!", xp: 20 }], level: { n: 2 }, levelUp: true, newBadges: [{ code: "aprobe" }] },
+  ]);
+  assert.equal(merged.gained, 40);
+  assert.deepEqual(merged.lines, [{ label: "Examen hecho", xp: 20 }, { label: "¡Cero aprobó!", xp: 20 }]);
+  assert.equal(merged.level.n, 2);
+  assert.equal(merged.levelUp, true);
+  assert.equal(merged.newBadges.length, 1);
+});

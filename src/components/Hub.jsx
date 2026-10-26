@@ -11,17 +11,34 @@ const BADGE_ICONS = { Pencil, Trophy, Zap, BookCheck, Library, Dumbbell, Flame, 
 const SUBJECT_ICONS = { Calculator, FlaskConical };
 const fmtDate = (d) => new Date(d).toLocaleDateString("es-PE", { day: "numeric", month: "short" });
 
-export default function Hub({ onContinue, onStartTopic, refreshKey }) {
+export default function Hub({ onContinue, onStartTopic, onExpired, refreshKey }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
+  const [retry, setRetry] = useState(0);
 
   useEffect(() => {
     let alive = true;
-    fetch("/api/hub").then(async (r) => { const j = await r.json(); if (!r.ok) throw new Error(j.error); if (alive) setData(j); }).catch((e) => alive && setError(e.message));
+    setError(null);
+    fetch("/api/hub")
+      .then(async (r) => {
+        if (r.status === 401) { onExpired?.(); return; }
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(r.status === 503 ? "No pude conectar con la base de datos para cargar tu hub." : j.error || "No pude cargar tu hub.");
+        if (alive) setData(j);
+      })
+      .catch((e) => alive && setError(e.message === "Failed to fetch" ? "Parece que no hay conexión." : e.message));
     return () => { alive = false; };
-  }, [refreshKey]);
+  }, [refreshKey, retry]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (error) return <section data-testid="hub"><h1>Mi hub</h1><p className="flash flash-error" role="alert">{error}</p></section>;
+  if (error) return (
+    <section data-testid="hub" aria-labelledby="h-hub">
+      <h1 id="h-hub">Mi hub</h1>
+      <p className="flash flash-error" role="alert">{error}</p>
+      <div className="cta-row">
+        <button type="button" className="btn btn-primary" onClick={() => setRetry((n) => n + 1)} data-testid="hub-retry">Reintentar</button>
+      </div>
+    </section>
+  );
   if (!data) return <section data-testid="hub" aria-busy="true"><h1>Mi hub</h1><p className="lead">Cargando tu mochila…</p></section>;
 
   const { learner, level, stats, badges, sessions, cards, recent } = data;

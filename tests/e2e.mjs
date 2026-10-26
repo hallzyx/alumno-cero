@@ -36,7 +36,7 @@ await click('[data-testid="fr-next"]');
 const before = await text('[data-testid="level-preview"]');
 await page.locator('input[name="level"][value="esceptico"]').check({ force: true });
 assert.notEqual(before, await text('[data-testid="level-preview"]'));
-assert.match(await text('[data-testid="plan"]'), /tu frase exacta/);
+assert.match(await text('[data-testid="plan"]'), /frase exacta/);
 await click('[data-testid="prefs-next"]');
 
 // edge cases on teach

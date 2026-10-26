@@ -2,9 +2,9 @@
 // Alumno Cero — UI controller (React). Engine and topics are pure JS in src/lib.
 import { useEffect, useRef, useState } from "react";
 import {
-  ArrowLeft, ArrowRight, BookCheck, Brain, Check, ClipboardList, Copy, Download, Dumbbell, Gift, Highlighter,
-  House, Keyboard, Lightbulb, LoaderCircle, Lock, MessageCircle, MessageCircleQuestionMark, Mic, PencilLine,
-  Calculator, FlaskConical, LogOut, Printer, RotateCcw, Search, SlidersHorizontal, Sparkles, Square, Star, Target, TriangleAlert, Trophy, Users, X,
+  ArrowLeft, ArrowRight, BookCheck, Brain, Check, CircleCheck, ClipboardList, Copy, Download, Dumbbell, Highlighter,
+  House, Keyboard, Lightbulb, LoaderCircle, LogIn, MessageCircle, MessageCircleQuestionMark, Mic, PencilLine,
+  Calculator, FlaskConical, LogOut, Printer, RotateCcw, Save, Search, SlidersHorizontal, Sparkles, Square, Star, Target, TriangleAlert, Trophy, UserPlus, Users, X,
 } from "lucide-react";
 import { LEVELS, TOPICS, getTopic } from "@/lib/topics";
 import { SUBJECTS, subjectOf } from "@/lib/subjects";
@@ -13,15 +13,23 @@ import Hub from "./Hub";
 import Auth from "./Auth";
 import Avatar from "./Avatar";
 import RewardToast from "./RewardToast";
+import Landing, { LandingFooter, LandingNav } from "./Landing";
 import { analyze, correctWork, knownConcepts, pickVariant, questionsFor, reflect, takeExam, validateExplanation } from "@/lib/engine";
 import Cuaderno from "./Cuaderno";
 import { clear, initialState, load, save } from "@/lib/store";
+import { DEMO_BAD } from "@/lib/demo";
+import { buildMigration, hasProgress as hasLocalProgress, mergeRewards, progressSummary } from "@/lib/migrate";
 import { startRecording } from "@/lib/audio";
 import { Cero, CeroSays } from "./Cero";
 
-const STEPS = ["welcome", "auth", "hub", "goal", "frictions", "prefs", "teach", "reading", "reflect", "exam", "result", "practice", "card"];
+const STEPS = ["welcome", "auth", "hub", "goal", "frictions", "prefs", "teach", "reading", "reflect", "exam", "result", "practice", "card", "notfound"];
 const STEP_LABEL = { welcome: "Inicio", auth: "Tu cuenta", hub: "Mi hub", goal: "Elige tu tema", frictions: "¿Qué te cuesta?", prefs: "Ajusta a Cero", teach: "Enséñale", reading: "Cero está leyendo", reflect: "Cero te cuenta", exam: "El examen de Cero", result: "Resultado", practice: "Mini-práctica", card: "Tu ficha" };
 const PROGRESS = { welcome: 0, auth: 0, hub: 0, goal: 1, frictions: 2, prefs: 3, teach: 4, reading: 5, reflect: 5, exam: 6, result: 7, practice: 7, card: 8 };
+// Screens without the step path (not part of the learning journey).
+const OFF_PATH = ["welcome", "auth", "hub", "notfound"];
+// Stations the learner can jump back to, to change an earlier decision.
+const STATION_SCREEN = { 1: "goal", 2: "frictions", 3: "prefs", 4: "teach" };
+const AI_TIMEOUT = 30_000;
 const TOTAL = 8;
 
 // Every screen has its own URL: /hub, /temas, /aprender/<tema>/<paso>…
@@ -39,7 +47,7 @@ function parsePath(path) {
   if (parts.length === 0) return { screen: "welcome" };
   if (parts.length === 1 && ["cuenta", "hub", "temas"].includes(parts[0])) return { screen: { cuenta: "auth", hub: "hub", temas: "goal" }[parts[0]] };
   if (parts.length === 3 && parts[0] === "aprender" && getTopic(parts[1]) && SCREEN_OF[parts[2]]) return { screen: SCREEN_OF[parts[2]], topicId: parts[1] };
-  return null; // unknown URL: stay where we are
+  return { screen: "notfound" }; // unknown URL: friendly 404 with a way back
 }
 // Apply a URL to a state. A different topic in the URL means starting that topic.
 function withUrl(s, parsed) {
@@ -77,12 +85,6 @@ const FRICTIONS = [
   { id: "nose", text: "Nadie me dice cuál es mi error exacto." },
 ];
 
-const DEMO_BAD = {
-  "interes-compuesto": "Un préstamo funciona así: el banco te presta dinero y te cobra una tasa de 10% anual. El interés se calcula sobre lo que pediste. Eso se repite cada año mientras dure el préstamo.",
-  "descuentos-sucesivos": "Un descuento es un porcentaje del precio que se resta de ese precio. Si una tienda hace dos descuentos, los porcentajes se suman y se aplican de una vez sobre el precio original.",
-  "fotosintesis": "La planta se alimenta de la tierra: de ahí saca su comida y su masa. El agua la absorben las raíces y la luz del sol le da la energía. Al final libera oxígeno y fabrica glucosa.",
-};
-
 const SR = typeof window !== "undefined" ? window.SpeechRecognition || window.webkitSpeechRecognition : null;
 const wordsIn = (s) => s.trim().split(/\s+/).filter(Boolean).length;
 const MIN_WORDS = 25;
@@ -113,6 +115,8 @@ export default function AlumnoCero() {
   const [dbOk, setDbOk] = useState(true);
   const [reward, setReward] = useState(null);
   const [ready, setReady] = useState(false); // account + URL resolved
+  const [authCtx, setAuthCtx] = useState({ mode: "register", save: false, returnTo: null }); // why the account screen was opened
+  const [elapsed, setElapsed] = useState(0); // seconds waiting for the AI (real, shown to the learner)
   const pending = useRef(false);
   const syncTimer = useRef(null);
   const rec = useRef(null);
@@ -167,15 +171,29 @@ export default function AlumnoCero() {
     return () => clearTimeout(syncTimer.current);
   }, [state, learner]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // The account session ended (expired or closed elsewhere): keep going without an account.
+  const learnerRef = useRef(null);
+  useEffect(() => { learnerRef.current = learner; }, [learner]);
+  const expire = () => {
+    if (!learnerRef.current) return;
+    learnerRef.current = null;
+    setLearner(null);
+    setFlash({ kind: "error", text: "Tu sesión se cerró. Tu avance sigue guardado en este navegador; vuelve a entrar cuando quieras para guardarlo en tu cuenta." });
+  };
+
   const pushState = (s) =>
-    fetch("/api/state", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sid: s.sid, state: s }) }).catch(() => {});
+    fetch("/api/state", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sid: s.sid, state: s }) })
+      .then((r) => { if (r.status === 401) expire(); return r; })
+      .catch(() => null);
 
   // Permanent history + XP. Flushes the snapshot first so the journey row exists.
   async function track(snapshot, type, payload) {
     if (!learner || !snapshot.sid) return;
     try {
-      await pushState(snapshot);
+      const put = await pushState(snapshot);
+      if (put && put.status === 401) return;
       const r = await fetch("/api/events", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type, sid: snapshot.sid, payload }) });
+      if (r.status === 401) return expire();
       const j = await r.json();
       if (r.ok && j.reward) {
         setReward(j.reward);
@@ -192,12 +210,16 @@ export default function AlumnoCero() {
   else if (need[screen] && !state[need[screen]]) screen = state.topicId ? "teach" : "welcome";
 
   useEffect(() => {
-    if (lastScreen.current && lastScreen.current !== screen) mainRef.current?.querySelector("h1")?.focus({ preventScroll: true });
+    // Move keyboard/screen-reader focus to the new screen's title (h1 needs tabindex to be focusable).
+    if (lastScreen.current && lastScreen.current !== screen) {
+      const h = mainRef.current?.querySelector("h1");
+      if (h) { h.setAttribute("tabindex", "-1"); h.focus({ preventScroll: true }); }
+    }
     lastScreen.current = screen;
   }, [screen]);
 
   useEffect(() => {
-    if (!ready) return;
+    if (!ready || screen === "notfound") return;
     const want = pathFor(screen, state.topicId);
     if (location.pathname !== want) history[screen === "reading" ? "replaceState" : "pushState"](null, "", want);
   }, [screen, state.topicId, ready]);
@@ -205,6 +227,7 @@ export default function AlumnoCero() {
   useEffect(() => {
     const onPop = () => {
       const parsed = parsePath(location.pathname);
+      if (parsed?.screen === "auth") setAuthCtx({ mode: "register", returnTo: null });
       if (parsed) setState((s) => (parsed.screen === "welcome" && learner ? { ...s, screen: "hub" } : withUrl(s, parsed)));
     };
     window.addEventListener("popstate", onPop);
@@ -216,6 +239,15 @@ export default function AlumnoCero() {
     const t = setTimeout(() => go("reflect"), 1400);
     return () => clearTimeout(t);
   }, [screen]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Real waiting time while the AI works, so the screen can say what is happening.
+  useEffect(() => {
+    if (!busy) return;
+    setElapsed(0);
+    const t0 = Date.now();
+    const id = setInterval(() => setElapsed(Math.floor((Date.now() - t0) / 1000)), 1000);
+    return () => clearInterval(id);
+  }, [busy]);
 
   function go(next) {
     setState((s) => ({ ...s, screen: next }));
@@ -235,25 +267,73 @@ export default function AlumnoCero() {
     setTimeout(() => document.getElementById("explanation")?.focus(), 0);
   };
 
+  // Late sign-up: copy this browser's journey into the new/existing account (state + history + mastery).
+  async function migrateProgress(plan) {
+    const rewards = [];
+    try {
+      const put = await fetch("/api/state", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sid: plan.sid, state: plan.snapshot }) });
+      if (!put.ok) return { ok: false, reward: null };
+      for (const ev of plan.events) {
+        const r = await fetch("/api/events", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: ev.type, sid: plan.sid, payload: ev.payload }) });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok) return { ok: false, reward: mergeRewards(rewards) };
+        rewards.push(j.reward);
+      }
+      return { ok: true, reward: mergeRewards(rewards) };
+    } catch {
+      return { ok: false, reward: mergeRewards(rewards) };
+    }
+  }
+
   const actions = {
     home: () => go(learner ? "hub" : "welcome"),
-    start: () => go(learner ? "hub" : dbOk ? "auth" : "goal"),
-    authDone: async () => {
-      const j = await fetch("/api/me").then((r) => r.json());
-      setLearner(j.learner);
+    // "Probar ahora": straight to the first real step. No account needed (it is offered after the first result).
+    start: () => go(learner ? "hub" : "goal"),
+    openAuth: (mode = "register", returnTo = screen) => {
+      setAuthCtx({ mode, returnTo });
+      go("auth");
+    },
+    authDone: async (migrate) => {
+      let who = null;
+      try { who = (await fetch("/api/me").then((r) => r.json())).learner; } catch { /* handled below */ }
+      if (!who) { setFlash({ kind: "error", text: "Entraste, pero no pude cargar tu cuenta. Recarga la página." }); return; }
       setDbOk(true);
-      setState({ ...initialState(), level: state.level, screen: "hub" });
-      setFlash(null);
+      const plan = migrate ? buildMigration(state, () => crypto.randomUUID()) : null;
+      if (plan) {
+        const back = authCtx.returnTo && STEPS.includes(authCtx.returnTo) && !OFF_PATH.includes(authCtx.returnTo) ? authCtx.returnTo : "hub";
+        plan.snapshot = { ...plan.snapshot, screen: back };
+        const res = await migrateProgress(plan);
+        learnerRef.current = who;
+        setLearner(who);
+        setState(plan.snapshot);
+        if (res.ok) clear(); // it now lives in the account
+        if (res.reward) { setReward(res.reward); if (res.reward.level) setLearner((l) => (l ? { ...l, level: res.reward.level } : l)); }
+        setFlash(res.ok
+          ? { kind: "info", text: "¡Listo! Tu avance quedó guardado en tu cuenta." }
+          : { kind: "error", text: "Entraste a tu cuenta, pero no pude guardar todo tu avance. Sigue también en este navegador; vuelve a intentarlo más tarde." });
+      } else {
+        learnerRef.current = who;
+        setLearner(who);
+        setState({ ...initialState(), level: state.level, screen: "hub" });
+        setFlash(null);
+      }
       window.scrollTo({ top: 0 });
     },
+    authSkip: () => go(authCtx.returnTo && !OFF_PATH.includes(authCtx.returnTo) ? authCtx.returnTo : "goal"),
     logout: async () => {
       await fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
-      clear(); setLearner(null); setReward(null); setState(initialState()); setFlash(null);
+      clear(); learnerRef.current = null; setLearner(null); setReward(null); setState(initialState()); setFlash(null);
     },
     continueSession: async (sid) => {
-      const r = await fetch(`/api/state?sid=${sid}`);
-      const j = await r.json();
-      if (r.ok) { setState({ ...initialState(), ...j.state, sid }); setFlash(null); window.scrollTo({ top: 0 }); }
+      try {
+        const r = await fetch(`/api/state?sid=${sid}`);
+        if (r.status === 401) return expire();
+        const j = await r.json();
+        if (!r.ok) throw new Error(j.error);
+        setState({ ...initialState(), ...j.state, sid }); setFlash(null); window.scrollTo({ top: 0 });
+      } catch {
+        setFlash({ kind: "error", text: "No pude abrir ese tema ahora. Revisa tu conexión y vuelve a intentarlo." });
+      }
     },
     startTopic: (topicId) => {
       setState({ ...initialState(), level: state.level, topicId, sid: crypto.randomUUID(), locked: true, screen: "goal" });
@@ -261,7 +341,7 @@ export default function AlumnoCero() {
       window.scrollTo({ top: 0 });
     },
     resume: () => go(state.mastered ? "card" : state.analysis ? "reflect" : "teach"),
-    back: () => { const prev = { goal: learner ? "hub" : "welcome", frictions: "goal", prefs: "frictions", teach: "prefs" }[screen]; if (prev) go(prev); },
+    back: () => { if (screen === "auth") return go(authCtx.returnTo && authCtx.returnTo !== "auth" && authCtx.returnTo !== "notfound" ? authCtx.returnTo : "welcome"); const prev = { goal: learner ? "hub" : "welcome", frictions: "goal", prefs: "frictions", teach: "prefs" }[screen]; if (prev) go(prev); },
     reset: () => {
       if (!confirm("¿Borrar tu progreso en este navegador y empezar de nuevo?")) return;
       clear(); setState(initialState()); setFlash(null);
@@ -271,7 +351,7 @@ export default function AlumnoCero() {
       if (!state.goal) return setFlash({ kind: "error", text: "Cuéntame para qué lo quieres aprender; así preparo la sesión." });
       go("frictions");
     },
-    demoText: () => { set({ text: DEMO_BAD[state.topicId] }); setFlash(null); },
+    demoText: () => { set({ text: DEMO_BAD[state.topicId] ?? "" }); setFlash(null); },
     goodText: () => { set({ text: topic.modelExplanation }); setFlash(null); },
     teachSubmit: async () => {
       const check = validateExplanation(topic, state.text);
@@ -285,14 +365,17 @@ export default function AlumnoCero() {
       set({ analysis: local, exam: null });
       go("reading");
       let analysis = { ...local, log: { ...local.log, fallback: true } };
+      const ctl = new AbortController();
+      const timer = setTimeout(() => ctl.abort(), AI_TIMEOUT);
       try {
         const [r] = await Promise.all([
-          fetch("/api/analyze", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ topicId: topic.id, text: state.text, level: state.level }) }),
+          fetch("/api/analyze", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ topicId: topic.id, text: state.text, level: state.level }), signal: ctl.signal }),
           new Promise((res) => setTimeout(res, 900)),
         ]);
         const j = await r.json();
         if (r.ok && j.analysis) analysis = j.analysis;
-      } catch { /* keep local analysis */ }
+      } catch { /* timeout or offline: keep local analysis */ }
+      clearTimeout(timer);
       pending.current = false;
       setBusy(null);
       set({ analysis });
@@ -304,17 +387,22 @@ export default function AlumnoCero() {
       if (!ai.configured || !state.analysis.log?.ai) { set({ exam: local() }); return go("exam"); }
       setBusy("exam");
       let exam = null;
+      const ctl = new AbortController();
+      const timer = setTimeout(() => ctl.abort(), AI_TIMEOUT);
       try {
-        const r = await fetch("/api/exam", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ topicId: topic.id, variantId: variant.id, text: state.text, analysis: state.analysis }) });
+        const r = await fetch("/api/exam", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ topicId: topic.id, variantId: variant.id, text: state.text, analysis: state.analysis }), signal: ctl.signal });
         const j = await r.json();
         if (r.ok && j.exam) exam = j.exam;
-      } catch { /* fall back below */ }
+      } catch { /* timeout or offline: fall back below */ }
+      clearTimeout(timer);
       setBusy(null);
       set({ exam: exam ?? { ...local(), fallback: true } });
       go("exam");
     },
     seeResult: () => {
-      const next = { history: [...state.history, { attempt: state.attempt + 1, passed: state.exam.passed, variantId: state.exam.variantId, at: Date.now() }], attempt: state.attempt + 1 };
+      // Coming back to the exam with the browser's Back button must not count the same exam twice.
+      if (state.exam.recorded) return go("result");
+      const next = { history: [...state.history, { attempt: state.attempt + 1, passed: state.exam.passed, variantId: state.exam.variantId, at: Date.now() }], attempt: state.attempt + 1, exam: { ...state.exam, recorded: true } };
       set(next);
       go("result");
       track({ ...state, ...next, screen: "result" }, "attempt", { attemptNo: next.attempt, variantId: state.exam.variantId, explanation: state.text, analysis: state.analysis, exam: state.exam, passed: state.exam.passed });
@@ -402,69 +490,57 @@ export default function AlumnoCero() {
   /* --------------------------------- shared -------------------------------- */
 
   const flashEl = flash && (
-    <div className={`flash flash-${flash.kind}`} role={flash.kind === "error" ? "alert" : "status"} data-testid="flash">{flash.text}</div>
+    <div className={`flash flash-${flash.kind}`} role={flash.kind === "error" ? "alert" : "status"} data-testid="flash" id="flash-msg">{flash.text}</div>
   );
 
   /* --------------------------------- screens ------------------------------- */
 
   const views = {
     welcome() {
-      const hasProgress = state.topicId && (state.text || state.history.length);
       return (
-        <>
-          <section className="hero" aria-labelledby="h-welcome">
-            <div className="hero-copy">
-              <p className="hero-kicker"><span className="tape-label">Aprende enseñando</span></p>
-              <h1 id="h-welcome" className="display">Enséñale a Cero. <span className="hl">Si se equivoca,</span> descubres tu error.</h1>
-              <p className="lead">Cero solo sabe lo que tú le explicas. Después hace un examen nuevo: si falla, te muestra la frase tuya que lo confundió.</p>
-              <div className="cta-row cta-hero">
-                <Btn cls="btn-primary btn-lg" onClick={actions.start} testid="start">¡Empezar! <span className="btn-hint">2 min</span> <I as={ArrowRight} /></Btn>
-                {hasProgress && !learner && <Btn cls="btn-secondary btn-lg" onClick={actions.resume} testid="resume"><I as={RotateCcw} /> Seguir donde quedé</Btn>}
-                {!learner && dbOk && <Btn cls="btn-secondary btn-lg" onClick={() => go("auth")} testid="welcome-login">Ya tengo cuenta</Btn>}
-              </div>
-              <ul className="trust" aria-label="Lo bueno de Alumno Cero">
-                <li><I as={Gift} size={18} /> Gratis y sin registro</li>
-                <li><I as={Lock} size={18} /> {ai.configured ? "Cero usa IA para leerte y hacer el examen" : "Tu texto se revisa en tu equipo"}</li>
-                <li><I as={Mic} size={18} /> Voz e IA opcionales</li>
-              </ul>
-            </div>
-            <figure className="specimen" aria-label="Ejemplo de lo que verás">
-              <div className="specimen-paper">
-                <span className="tape tape-tl" aria-hidden="true" />
-                <Cero mood="confundido" cls="cero-lg" />
-                <p className="specimen-quote">«El interés se calcula sobre <mark className="pen">lo que pediste</mark>.»</p>
-                <p className="pen-note" aria-hidden="true">¡Fallé por esta frase!</p>
-              </div>
-              <figcaption>Así se ve: Cero calculó mal un préstamo y marcó la frase que lo confundió.</figcaption>
-            </figure>
-          </section>
-
-          <dl className="pitch" data-testid="value-prop">
-            <div className="sticky sticky-yellow"><dt>¿Es para ti?</dt><dd>Sí, si lees un tema, lo entiendes… y te trabas al usarlo.</dd></div>
-            <div className="sticky sticky-pink"><dt>El problema</dt><dd>Releer parece suficiente, pero nadie te dice dónde está tu error.</dd></div>
-            <div className="sticky sticky-mint"><dt>Te llevas</dt><dd>Tu frase a corregir, una práctica corta y tu ficha de dominio.</dd></div>
-          </dl>
-
-          <section className="how" aria-labelledby="h-how">
-            <h2 id="h-how">¿Cómo funciona?</h2>
-            <ol className="how-list">
-              <li><span className="how-ico"><I as={PencilLine} size={26} /></span><strong>Enseñas</strong> Con tus palabras, escribiendo o hablando.</li>
-              <li><span className="how-ico"><I as={Brain} size={26} /></span><strong>Cero lo intenta</strong> Resuelve un problema nuevo solo con lo que le dijiste.</li>
-              <li><span className="how-ico"><I as={Highlighter} size={26} /></span><strong>Ves tu error</strong> Si falla, se marca la frase que lo confundió.</li>
-              <li><span className="how-ico"><I as={Trophy} size={26} /></span><strong>Lo corriges</strong> Y te llevas tu ficha de dominio.</li>
-            </ol>
-            <p className="note">¿Por qué funciona? Enseñarle a alguien te hace pensar más (el «efecto protegido», Chase et al., 2009). <a href="https://purl.stanford.edu/zm369yx3532" target="_blank" rel="noopener">Ver estudio<span className="sr-only"> (se abre en otra pestaña)</span></a>.</p>
-          </section>
-        </>
+        <Landing
+          ai={ai}
+          dbOk={dbOk}
+          hasProgress={!learner && hasLocalProgress(state)}
+          onStart={actions.start}
+          onResume={actions.resume}
+          onLogin={() => actions.openAuth("login")}
+          onStartTopic={actions.startTopic}
+        />
       );
     },
 
     auth() {
-      return <Auth dbOk={dbOk} onDone={actions.authDone} onSkip={() => go("goal")} />;
+      const saving = !learner && hasLocalProgress(state) && topic ? progressSummary(state, topic.title) : "";
+      return (
+        <Auth
+          key={authCtx.mode}
+          dbOk={dbOk}
+          initialMode={authCtx.mode}
+          saving={saving}
+          onDone={actions.authDone}
+          onSkip={actions.authSkip}
+          skipLabel={authCtx.returnTo && !OFF_PATH.includes(authCtx.returnTo) ? "Volver sin crear cuenta" : "Seguir sin cuenta"}
+        />
+      );
+    },
+
+    notfound() {
+      return (
+        <section aria-labelledby="h-404" className="notfound" data-testid="not-found">
+          <Cero mood="confundido" cls="cero-xl" />
+          <h1 id="h-404">Esta página no existe</h1>
+          <p className="lead">Puede que el enlace esté incompleto o que el tema ya no exista. ¡Hasta Cero se perdió!</p>
+          <div className="cta-row cta-center">
+            <Btn cls="btn-primary btn-lg" onClick={() => go(learner ? "hub" : "welcome")} testid="notfound-home"><I as={House} /> Ir al inicio</Btn>
+            <Btn cls="btn-secondary" onClick={() => go(learner ? "hub" : "goal")} testid="notfound-topics">Elegir un tema</Btn>
+          </div>
+        </section>
+      );
     },
 
     hub() {
-      return <Hub onContinue={actions.continueSession} onStartTopic={actions.startTopic} />;
+      return <Hub onContinue={actions.continueSession} onStartTopic={actions.startTopic} onExpired={expire} />;
     },
 
     goal() {
@@ -518,29 +594,31 @@ export default function AlumnoCero() {
     },
 
     frictions() {
+      const marked = FRICTIONS.filter((f) => state.frictions[f.id] !== undefined).length;
       return (
         <section aria-labelledby="h-fr">
-          <CeroSays mood="curioso">Cuéntame qué te cuesta. Así preparo mejor mi examen.</CeroSays>
+          <CeroSays mood="curioso">Cuéntame qué te cuesta. Así sé cómo ayudarte.</CeroSays>
           <h1 id="h-fr">¿Te pasa algo de esto?</h1>
-          <p className="lead">Con <strong>{topic.title}</strong>. Toca «Sí» o «No». También puedes saltarte este paso.</p>
+          <p className="lead">Con <strong>{topic.title}</strong>. Responde «Sí» o «No» en cada frase. En el siguiente paso verás qué cambia con tus respuestas. Puedes saltarte este paso.</p>
           <ul className="friction-list" data-testid="frictions">
             {FRICTIONS.map((f) => {
               const v = state.frictions[f.id];
-              const pick = (val) => set((s) => ({ frictions: { ...s.frictions, [f.id]: val } }));
+              const pick = (val) => set((s) => ({ frictions: { ...s.frictions, [f.id]: s.frictions[f.id] === val ? undefined : val } }));
               return (
                 <li key={f.id} className={`card friction ${v === true ? "is-yes" : v === false ? "is-no" : ""}`}>
-                  <p>{f.text}</p>
-                  <div className="seg" role="group" aria-label={f.text}>
-                    <button className={`btn seg-yes ${v === true ? "is-on" : ""}`} aria-pressed={v === true} onClick={() => pick(true)} data-action="friction" data-id={f.id} data-val="1"><I as={Check} size={20} /> Sí, me pasa</button>
-                    <button className={`btn seg-no ${v === false ? "is-on" : ""}`} aria-pressed={v === false} onClick={() => pick(false)} data-action="friction" data-id={f.id} data-val="0"><I as={X} size={20} /> No</button>
+                  <p id={`fr-${f.id}`}>{f.text}</p>
+                  <div className="seg" role="group" aria-labelledby={`fr-${f.id}`}>
+                    <button type="button" className={`btn seg-yes ${v === true ? "is-on" : ""}`} aria-pressed={v === true} onClick={() => pick(true)} data-action="friction" data-id={f.id} data-val="1"><I as={Check} size={20} /> Sí, me pasa</button>
+                    <button type="button" className={`btn seg-no ${v === false ? "is-on" : ""}`} aria-pressed={v === false} onClick={() => pick(false)} data-action="friction" data-id={f.id} data-val="0"><I as={X} size={20} /> No</button>
                   </div>
                 </li>
               );
             })}
           </ul>
+          <p className="note fr-count" aria-live="polite">{marked ? `Respondiste ${marked} de ${FRICTIONS.length}. Toca otra vez una respuesta para quitarla.` : "Aún no respondes ninguna."}</p>
           <div className="cta-row">
             <Btn cls="btn-primary btn-lg" onClick={() => go("prefs")} testid="fr-next">Continuar <I as={ArrowRight} /></Btn>
-            <Btn cls="btn-ghost" onClick={() => go("prefs")}>Saltar este paso</Btn>
+            <Btn cls="btn-ghost" onClick={() => go("prefs")} testid="fr-skip">Saltar este paso</Btn>
           </div>
         </section>
       );
@@ -549,17 +627,20 @@ export default function AlumnoCero() {
     prefs() {
       const yes = FRICTIONS.filter((f) => state.frictions[f.id] === true).map((f) => f.id);
       const bits = [];
-      if (yes.includes("leo")) bits.push("el examen usará un caso nuevo, no el que ya viste");
-      if (yes.includes("bloqueo")) bits.push("Cero te dará pistas antes de que falles");
-      if (yes.includes("poco")) bits.push("verás una práctica corta de 2 preguntas");
-      if (yes.includes("nose")) bits.push("te mostraré tu frase exacta que causó el error");
-      if (yes.includes("sinnet")) bits.push(ai.configured ? "si falla internet, Cero usa su modo básico y sigues practicando" : "el análisis y el examen corren en tu equipo, sin depender de internet");
+      if (yes.includes("leo")) bits.push("Te trabas al usarlo: el examen de Cero será un caso nuevo, no uno que ya viste.");
+      if (yes.includes("bloqueo")) bits.push("Te pones en blanco: antes del examen, Cero te dirá sus dudas para que completes tu explicación con calma.");
+      if (yes.includes("poco")) bits.push("Tienes poco tiempo: si Cero falla, la práctica es de solo 2 preguntas.");
+      if (yes.includes("nose")) bits.push("Nadie te dice tu error: si Cero falla, verás marcada la frase exacta que lo confundió.");
+      if (yes.includes("sinnet")) bits.push(ai.configured ? "Internet inestable: si la IA no responde, Cero usa su modo básico y sigues practicando." : "Internet inestable: el análisis y el examen corren en tu equipo, sin depender de internet.");
       const g = GOALS.find((x) => x.id === state.goal);
       const ask = topic.concepts[1]?.ask[state.level] ?? topic.concepts[0].ask[state.level];
+      const voice = state.inputMode === "voice" && voiceOk;
       return (
         <section aria-labelledby="h-pref">
-          <h1 id="h-pref">¿Cómo será Cero?</h1>
-          <p className="lead">Elige cómo te pregunta. Esto también cambia su examen.</p>
+          <h1 id="h-pref">Ajusta a Cero</h1>
+          <p className="lead">Tus elecciones cambian la siguiente pantalla. Puedes volver a cambiarlas cuando quieras.</p>
+          <h2 className="h-first">¿Cómo será Cero?</h2>
+          <p className="note">Cambia cómo te pregunta y qué problema le toca en el examen.</p>
           <fieldset className="cards cards-levels" data-testid="levels">
             <legend className="sr-only">Nivel de Cero</legend>
             {Object.values(LEVELS).map((l) => (
@@ -576,22 +657,31 @@ export default function AlumnoCero() {
           <fieldset className="cards cards-modes" data-testid="modes">
             <legend className="sr-only">Modo de entrada</legend>
             <Choice name="mode" value="text" checked={state.inputMode === "text"} onChange={() => set({ inputMode: "text" })}>
-              <span className="choice-ico"><I as={Keyboard} /></span><span className="choice-text"><strong>Escribiendo</strong></span>
+              <span className="choice-ico"><I as={Keyboard} /></span><span className="choice-text"><strong>Escribiendo</strong><small>Un cuaderno y frases para empezar</small></span>
             </Choice>
             <Choice name="mode" value="voice" checked={state.inputMode === "voice"} disabled={!voiceOk} onChange={() => set({ inputMode: "voice" })}>
               <span className="choice-ico"><I as={Mic} /></span>
-              <span className="choice-text"><strong>Hablando</strong>{!voiceOk && <small>No funciona en este navegador</small>}</span>
+              <span className="choice-text"><strong>Hablando</strong><small>{voiceOk ? "Un botón grande de micrófono; luego puedes corregir el texto" : "Tu navegador no permite dictar"}</small></span>
             </Choice>
           </fieldset>
-          {state.inputMode === "voice" && (
-            <p className="note note-box">
-              {ai.configured
-                ? "Solo usaré el micrófono cuando toques «Dictar». Tu audio se envía a OpenRouter para pasarlo a texto. Si no quieres, puedes escribir."
-                : "Solo usaré el micrófono cuando toques «Dictar», y tu voz se pasa a texto en tu navegador. Si no quieres, puedes escribir."}
-            </p>
+          {voice && (
+            <div className="priming" data-testid="mic-priming" aria-live="polite">
+              <h3 className="plan-title"><I as={Mic} size={20} /> Antes de usar el micrófono</h3>
+              <ul className="check">
+                <li><strong>Para qué:</strong> para que le expliques a Cero hablando, como en clase.</li>
+                <li><strong>Cuándo:</strong> solo mientras tocas el botón grande. Nunca escucha en segundo plano.</li>
+                <li><strong>Qué pasa con tu voz:</strong> {ai.configured ? "se envía a un servicio de IA (OpenRouter) para pasarla a texto. Alumno Cero no guarda el audio." : "tu navegador la pasa a texto. Alumno Cero no guarda el audio."}</li>
+                <li><strong>Permiso:</strong> tu navegador te lo pedirá la primera vez. Si dices que no, puedes escribir igual.</li>
+              </ul>
+              <Btn cls="btn-secondary" onClick={() => set({ inputMode: "text" })} testid="mic-decline"><I as={Keyboard} size={20} /> Prefiero escribir</Btn>
+            </div>
           )}
           {(bits.length > 0 || g) && (
-            <div className="plan sticky sticky-yellow" data-testid="plan"><h2 className="plan-title"><I as={Sparkles} size={20} /> Tu sesión, a tu medida</h2><ul>{g && <li>{g.cero}</li>}{bits.map((b) => <li key={b}>{b}</li>)}</ul></div>
+            <div className="plan sticky sticky-yellow" data-testid="plan">
+              <h2 className="plan-title"><I as={Sparkles} size={20} /> Tu sesión, según lo que respondiste</h2>
+              <ul>{g && <li>{g.cero}</li>}{bits.map((b) => <li key={b}>{b}</li>)}</ul>
+              <p className="note">¿Algo no va contigo? <button type="button" className="linkish" onClick={() => go("frictions")}>Cambia tus respuestas</button>.</p>
+            </div>
           )}
           <div className="cta-row"><Btn cls="btn-primary btn-lg" onClick={() => go("teach")} testid="prefs-next">¡A enseñarle a Cero! <I as={ArrowRight} /></Btn></div>
         </section>
@@ -612,12 +702,13 @@ export default function AlumnoCero() {
           <CeroSays mood={state.attempt > 0 ? "pensando" : "curioso"}><strong>{level.name}:</strong> {level.intro}</CeroSays>
           <h1 id="h-teach">Enséñale: {topic.title}</h1>
           <p className="lead">{topic.starter}</p>
+          <p className="settings-line" data-testid="teach-settings">
+            <span className="chip">{level.name}</span>
+            <button type="button" className="linkish" onClick={() => go("prefs")} data-testid="teach-change-prefs">Cambiar ajustes</button>
+          </p>
           <div className="teach-grid">
-          <div className="teach-side">
-          <div className={`subject-help subject-${subject.tone}`} data-testid="subject-help"><span className="subject-ico" aria-hidden="true">{subject.mode === "steps" ? <Calculator size={22} strokeWidth={2.5} /> : <FlaskConical size={22} strokeWidth={2.5} />}</span><p><strong>{subject.teach.title}.</strong> {subject.teach.help}</p></div>
-          <Mochila topic={topic} onInsert={insertText} />
-          </div>
           <div className="teach-main">
+          <div className={`subject-help subject-${subject.tone}`} data-testid="subject-help"><span className="subject-ico" aria-hidden="true">{subject.mode === "steps" ? <Calculator size={22} strokeWidth={2.5} /> : <FlaskConical size={22} strokeWidth={2.5} />}</span><p><strong>{subject.teach.title}.</strong> {subject.teach.help}</p></div>
           {callout && <div className="callout" data-testid="retry-callout"><span className="callout-ico"><I as={Highlighter} /></span><p><strong>Para corregir:</strong> {callout}</p></div>}
           <div className="seg mode-seg" role="group" aria-label="¿Cómo le vas a enseñar?">
             <button type="button" className={`btn ${!voiceMode ? "btn-primary" : "btn-secondary"}`} aria-pressed={!voiceMode} onClick={() => set({ inputMode: "text" })} data-testid="mode-text"><I as={Keyboard} size={20} /> Escribiendo</button>
@@ -639,7 +730,7 @@ export default function AlumnoCero() {
             </div>
           )}
           <label htmlFor="explanation" className="label"><I as={PencilLine} size={20} /> {voiceMode ? "Lo que dijiste (puedes corregirlo)" : "Tu explicación"}</label>
-          <textarea id="explanation" className="notebook" data-testid="explanation" rows={voiceMode ? 5 : 9} placeholder={voiceMode ? "Aquí aparecerá lo que digas…" : topic.hint} aria-describedby="teach-help" value={state.text} onChange={(e) => set({ text: e.target.value })} />
+          <textarea id="explanation" className="notebook" data-testid="explanation" rows={voiceMode ? 5 : 9} placeholder={voiceMode ? "Aquí aparecerá lo que digas…" : topic.hint} aria-describedby={flash?.kind === "error" ? "teach-help flash-msg" : "teach-help"} aria-invalid={flash?.kind === "error" ? true : undefined} value={state.text} onChange={(e) => { set({ text: e.target.value }); if (flash?.kind === "error") setFlash(null); }} />
           <div className={`wordmeter ${words >= MIN_WORDS ? "is-full" : ""}`} aria-hidden="true"><span style={{ width: `${pct}%` }} /></div>
           <p id="teach-help" className="note"><strong><span id="wordcount">{words}</span> palabras</strong> · Intenta llegar a {MIN_WORDS}. Cero solo usará lo que {voiceMode ? "digas" : "escribas"} aquí.</p>
           {flashEl}
@@ -650,7 +741,10 @@ export default function AlumnoCero() {
             <Btn cls="btn-ghost" onClick={actions.demoText} testid="demo-text" title="Rellena una explicación con un error típico para ver cómo falla Cero"><I as={Lightbulb} size={20} /> Rellenar con una idea incorrecta</Btn>
             <Btn cls="btn-ghost" onClick={actions.goodText} testid="demo-good" title="Rellena una explicación correcta para ver cómo aprueba Cero"><I as={BookCheck} size={20} /> Rellenar con la explicación correcta</Btn>
           </div>
-        </div>
+          </div>
+          <aside className="teach-side" aria-label="Ayuda para enseñar">
+            <Mochila topic={topic} onInsert={insertText} />
+          </aside>
           </div>
         </section>
       );
@@ -659,10 +753,20 @@ export default function AlumnoCero() {
     reading() {
       const a = state.analysis;
       return (
-        <section className="reading" aria-labelledby="h-read" aria-live="polite">
+        <section className="reading" aria-labelledby="h-read">
           <Cero mood="pensando" cls="cero-xl cero-think" />
           <h1 id="h-read">Cero está leyendo…</h1>
-          <p className="lead" data-testid="processing">{busy === "analyze" ? "Estoy leyendo tu explicación con IA para ver qué ideas me enseñaste…" : `Encontré ${a.log.sentences} frases y ${a.log.matched} ideas clave. Todo pasa en tu equipo, sin internet.`}</p>
+          <p className="lead" data-testid="processing" role="status">{busy === "analyze" ? "Estoy leyendo tu explicación con IA para ver qué ideas me enseñaste." : "Revisé tu explicación en tu equipo, sin enviarla a ningún servidor."}</p>
+          <ol className="proc-steps" data-testid="proc-steps">
+            <li className="done"><span className="proc-ico"><I as={Check} size={18} /></span> Revisé tu texto: {a.log.sentences} {a.log.sentences === 1 ? "frase" : "frases"} y {a.log.matched} {a.log.matched === 1 ? "idea clave" : "ideas clave"}.</li>
+            {busy === "analyze" && (
+              <>
+                <li className="now"><span className="proc-ico"><span className="spin"><I as={LoaderCircle} size={18} /></span></span> Lo envié a la IA ({ai.writingModel}) y espero su lectura… <span className="proc-time" aria-hidden="true">{elapsed} s</span></li>
+                <li className="todo"><span className="proc-ico" aria-hidden="true">3</span> Después compruebo que cada cita sea una frase tuya, palabra por palabra.</li>
+              </>
+            )}
+          </ol>
+          {busy === "analyze" && elapsed >= 12 && <p className="note" data-testid="slow-note">La IA está tardando un poco. Si pasa de {AI_TIMEOUT / 1000} s, sigo con mi modo básico para que no esperes.</p>}
           <div className="spinner" aria-hidden="true"><span /><span /><span /></div>
         </section>
       );
@@ -675,7 +779,7 @@ export default function AlumnoCero() {
         <section aria-labelledby="h-reflect">
           <div className="cero-row cero-row-title"><Cero mood={qs.length ? "curioso" : "feliz"} cls="cero-lg" /><h1 id="h-reflect">Esto es lo que entendí</h1></div>
           {state.analysis.log?.ai && <p className="note"><I as={Sparkles} size={16} /> Analizado con IA ({ai.writingModel}). Cero escribió lo que entendió y sus dudas con IA, usando solo tus frases (cada cita se verifica palabra por palabra).</p>}
-          {state.analysis.log?.fallback && <p className="note">La IA no respondió bien, así que usé el análisis básico de tu dispositivo.</p>}
+          {state.analysis.log?.fallback && <p className="note note-box" data-testid="ai-fallback">La IA no respondió a tiempo (o no respondió bien), así que usé el análisis básico de tu equipo. Puedes seguir igual.</p>}
           <ul className="understood" data-testid="understood">
             {refl.map((r) => (
               <li key={r.conceptId} className={`card note-card ${r.state}`}>
@@ -707,8 +811,9 @@ export default function AlumnoCero() {
           )}
           <div className="cta-row">
             <Btn cls="btn-primary btn-lg" onClick={actions.takeExam} testid="take-exam" disabled={busy === "exam"}>{busy === "exam" ? <>Cero está resolviendo… <I as={LoaderCircle} /></> : <>¡Que Cero haga el examen! <I as={ArrowRight} /></>}</Btn>
-            <Btn cls="btn-secondary" onClick={() => go("teach")}><I as={PencilLine} /> Cambiar mi explicación</Btn>
+            <Btn cls="btn-secondary" onClick={() => go("teach")} disabled={busy === "exam"} testid="reflect-edit"><I as={PencilLine} /> Cambiar mi explicación</Btn>
           </div>
+          <p className="note" role="status" data-testid="exam-status">{busy === "exam" && <>Cero está resolviendo un problema nuevo con IA. Suele tardar menos de 20 s; si la IA no responde, uso el modo básico. <span aria-hidden="true">({elapsed} s)</span></>}</p>
         </section>
       );
     },
@@ -718,9 +823,9 @@ export default function AlumnoCero() {
       const v = topic.variants.find((x) => x.id === e.variantId);
       return (
         <section aria-labelledby="h-exam">
-          <div className="cero-row cero-row-title"><Cero mood="pensando" cls="cero-lg" /><div><p className="kicker">Un problema que Cero nunca vio</p><h1 id="h-exam">El examen</h1></div>
+          <div className="cero-row cero-row-title"><Cero mood="pensando" cls="cero-lg" /><div><p className="kicker">Un problema que Cero nunca vio</p><h1 id="h-exam">El examen</h1></div></div>
           {e.ai && <p className="note"><I as={Sparkles} size={16} /> Cero razonó con IA usando solo tu explicación; la aritmética se verifica por separado.</p>}
-          {e.fallback && <p className="note">La IA no dio un razonamiento verificable, así que el examen usó el modo básico.</p>}</div>
+          {e.fallback && <p className="note note-box" data-testid="exam-fallback">La IA no dio un razonamiento verificable a tiempo, así que el examen usó el modo básico. El resultado sigue siendo válido.</p>}
           <div className="exam-paper"><span className="tape tape-tc" aria-hidden="true" /><p>{v.context}</p><p className="exam-q"><strong>{v.question}</strong></p></div>
           <h2>Así lo resuelve Cero <small className="h-sub">(solo con lo que le enseñaste)</small></h2>
           <p className="note">{subject.exam.intro}</p>
@@ -755,6 +860,7 @@ export default function AlumnoCero() {
             <h1 id="h-res" className="display">¡Aprobé! 🎉</h1>
             <p className="lead">Resolví un problema <strong>nuevo</strong> solo con tu explicación. Respuesta correcta: <strong className="nowrap ok-text">{e.expectedText}</strong>.</p>
             <div className="cta-row"><Btn cls="btn-primary btn-lg" onClick={actions.finish} testid="finish"><I as={Trophy} /> Ver mi ficha de dominio</Btn></div>
+            {!learner && <p className="note">Tu ficha es tuya: podrás copiarla, descargarla o imprimirla. Si quieres, después la guardas en una cuenta gratis.</p>}
           </section>
         );
       }
@@ -851,8 +957,31 @@ export default function AlumnoCero() {
             <Btn cls="btn-secondary" onClick={actions.downloadCard}><I as={Download} /> Descargar</Btn>
             <Btn cls="btn-secondary" onClick={() => window.print()}><I as={Printer} /> Imprimir</Btn>
           </div>
-          <p className="note">Tu progreso queda guardado aquí. No necesitas crear una cuenta.</p>
-          <Btn cls="btn-ghost" onClick={actions.anotherTopic}><I as={RotateCcw} size={20} /> Aprender otro tema</Btn>
+          {learner ? (
+            <div className="save-box save-box-ok" data-testid="saved-box">
+              <span className="save-ico"><I as={CircleCheck} size={26} /></span>
+              <div>
+                <h2 className="plan-title">Tu ficha está guardada en tu cuenta</h2>
+                <p>Mira tu XP, tus insignias y todas tus fichas en tu hub.</p>
+                <Btn cls="btn-secondary" onClick={() => go("hub")} testid="card-hub"><I as={House} size={20} /> Ir a mi hub</Btn>
+              </div>
+            </div>
+          ) : dbOk ? (
+            <div className="save-box" data-testid="save-progress-box">
+              <span className="save-ico"><I as={Save} size={26} /></span>
+              <div>
+                <h2 className="plan-title">Guarda tu progreso (opcional)</h2>
+                <p>Ahora tu ficha vive solo en este navegador. Con una cuenta gratis la guardas, ganas XP e insignias y la ves desde cualquier equipo. Sin correo: solo usuario y contraseña.</p>
+                <div className="cta-row cta-tight">
+                  <Btn cls="btn-primary" onClick={() => actions.openAuth("register", "card")} testid="save-progress"><I as={UserPlus} size={20} /> Crear mi cuenta gratis</Btn>
+                  <Btn cls="btn-ghost" onClick={() => actions.openAuth("login", "card")} testid="save-progress-login"><I as={LogIn} size={20} /> Ya tengo cuenta</Btn>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <p className="note note-box" data-testid="save-unavailable">Las cuentas no están disponibles ahora mismo. Tu ficha queda guardada en este navegador; también puedes copiarla o descargarla.</p>
+          )}
+          <Btn cls="btn-ghost" onClick={actions.anotherTopic} testid="another-topic"><I as={RotateCcw} size={20} /> Aprender otro tema</Btn>
         </section>
       );
     },
@@ -861,55 +990,77 @@ export default function AlumnoCero() {
   /* ---------------------------------- shell -------------------------------- */
 
   const step = PROGRESS[screen] ?? 0;
-  const canBack = ["goal", "frictions", "prefs", "teach"].includes(screen);
+  const canBack = ["goal", "frictions", "prefs", "teach"].includes(screen) || (screen === "auth" && !learner);
   const showTopFlash = flash && !["welcome", "teach", "goal", "card"].includes(screen);
+  const canJump = ["frictions", "prefs", "teach", "reflect"].includes(screen) && !busy;
+  const footerNote = (
+    <p>
+      <strong>{learner ? "Tu progreso está a salvo:" : "Tu progreso se queda aquí:"}</strong> {learner ? "tu nivel, insignias y fichas se guardan en tu cuenta." : "sin cuenta, se guarda solo en este navegador."}{" "}
+      {ai.configured
+        ? "Para leer tu explicación, hacer el examen y dictar por voz, Cero envía tu texto o tu audio a OpenRouter (IA). Si la IA falla, usa un modo básico en tu equipo."
+        : "Tus explicaciones no se envían a ningún servidor."}
+      {!storageOk && <span className="warn-inline"> Tu navegador no deja guardar: no podré recordar tu progreso.</span>}
+    </p>
+  );
 
   return (
     <div id="app" data-screen={screen}>
       <header className="topbar" data-testid="topbar">
-        <a className="brand" href="#" onClick={(e) => { e.preventDefault(); actions.home(); }} aria-label="Alumno Cero, volver al inicio">
+        <a className="brand" href="/" onClick={(e) => { e.preventDefault(); actions.home(); }} aria-label="Alumno Cero, volver al inicio">
           <span className="brand-mark" aria-hidden="true"><Cero mood="curioso" decorative /></span>
           <span className="brand-name">Alumno <span>Cero</span></span>
         </a>
-        <div className="topbar-right">
-          {learner && <button className="btn btn-ghost btn-sm chip-me" onClick={() => go("hub")} aria-label={`Mi hub: nivel ${learner.level.n}`} data-testid="me-chip"><Avatar id={learner.avatar} size={28} /><span className="btn-label">Nv {learner.level.n}</span></button>}
-          {canBack && <button className="btn btn-ghost btn-sm" onClick={actions.back}><I as={ArrowLeft} size={20} /> Atrás</button>}
-          {learner && <button className="btn btn-ghost btn-sm" onClick={actions.logout} data-testid="logout"><I as={LogOut} size={20} /><span className="btn-label">Salir</span></button>}
-          {!["welcome", "auth", "hub"].includes(screen) && <button className="btn btn-ghost btn-sm" onClick={actions.reset} title="Borra tu progreso de este navegador"><I as={RotateCcw} size={20} /><span className="btn-label">Empezar de nuevo</span></button>}
-        </div>
+        {screen === "welcome" && !learner ? (
+          <LandingNav dbOk={dbOk} onStart={actions.start} onLogin={() => actions.openAuth("login")} />
+        ) : (
+          <div className="topbar-right">
+            {learner && <button type="button" className="btn btn-ghost btn-sm chip-me" onClick={() => go("hub")} aria-label={`Mi hub: nivel ${learner.level.n}`} data-testid="me-chip"><Avatar id={learner.avatar} size={28} /><span className="btn-label">Nv {learner.level.n}</span></button>}
+            {canBack && <button type="button" className="btn btn-ghost btn-sm" onClick={actions.back} data-testid="back"><I as={ArrowLeft} size={20} /> Atrás</button>}
+            {!learner && dbOk && !["auth", "notfound"].includes(screen) && <button type="button" className="btn btn-ghost btn-sm" onClick={() => actions.openAuth("login", screen)} data-testid="topbar-login"><I as={LogIn} size={20} /><span className="btn-label">Entrar</span></button>}
+            {learner && <button type="button" className="btn btn-ghost btn-sm" onClick={actions.logout} data-testid="logout"><I as={LogOut} size={20} /><span className="btn-label">Salir</span></button>}
+            {!OFF_PATH.includes(screen) && <button type="button" className="btn btn-ghost btn-sm" onClick={actions.reset} title="Borra tu progreso de este navegador" data-testid="reset"><I as={RotateCcw} size={20} /><span className="btn-label">Empezar de nuevo</span></button>}
+          </div>
+        )}
       </header>
-      {!["welcome", "auth", "hub"].includes(screen) && (
-        <div className="progress" role="progressbar" aria-label="Progreso" aria-valuemin={0} aria-valuemax={TOTAL} aria-valuenow={step} aria-valuetext={`Paso ${step} de ${TOTAL}: ${STEP_LABEL[screen]}`}>
-          <ol className="path" aria-hidden="true">
+      {!OFF_PATH.includes(screen) && (
+        <nav className="progress" aria-label="Pasos del recorrido" data-testid="progress">
+          <ol className="path">
             {STATIONS.map((s, i) => {
               const n = i + 1;
               const st = n < step ? "done" : n === step ? "now" : "todo";
               const Icon = n < step ? Check : s.icon;
-              return (
-                <li key={n} className={`station ${st}`}>
-                  <span className="station-dot"><Icon size={n === step ? 22 : 18} strokeWidth={2.6} /></span>
+              const target = canJump && n < step ? STATION_SCREEN[n] : null;
+              const inner = (
+                <>
+                  <span className="station-dot" aria-hidden="true"><Icon size={n === step ? 22 : 18} strokeWidth={2.6} /></span>
                   <span className="station-name">{s.name}</span>
+                  <span className="sr-only">{st === "done" ? " (hecho)" : st === "now" ? " (paso actual)" : " (pendiente)"}</span>
+                </>
+              );
+              return (
+                <li key={n} className={`station ${st}`} aria-current={st === "now" ? "step" : undefined}>
+                  {target
+                    ? <button type="button" className="station-btn" onClick={() => go(target)} title={`Volver a: ${s.name}`} data-testid={`station-${n}`}>{inner}</button>
+                    : <span className="station-btn">{inner}</span>}
                 </li>
               );
             })}
           </ol>
-          <p className="progress-label"><span className="progress-step">Paso {step} de {TOTAL}</span> <span className="progress-name">{STEP_LABEL[screen]}</span></p>
-        </div>
+          <p className="progress-label" aria-hidden="true"><span className="progress-step">Paso {step} de {TOTAL}</span> <span className="progress-name">{STEP_LABEL[screen]}</span></p>
+        </nav>
       )}
       <main id="main" tabIndex={-1} ref={mainRef} className={screen === "welcome" ? "" : "sheet"}>
         {showTopFlash && flashEl}
         {views[screen]()}
       </main>
-      <footer className="footer">
-        <p>
-          <strong>{learner ? "Tu progreso está a salvo:" : "Tu progreso se queda aquí:"}</strong> {learner ? "tu nivel, insignias y fichas se guardan en tu cuenta." : "sin cuenta, se guarda solo en este navegador."}{" "}
-          {ai.configured
-            ? "Para leer tu explicación, hacer el examen y dictar por voz, Cero envía tu texto o tu audio a OpenRouter (IA). Si la IA falla, usa un modo básico en tu equipo."
-            : "Tus explicaciones no se envían a ningún servidor."}
-          {!storageOk && <span className="warn-inline"> Tu navegador no deja guardar: no podré recordar tu progreso.</span>}
-        </p>
-        <p>Alumno Cero es para practicar con temas elegidos. No reemplaza a tu profe.</p>
-      </footer>
+      {screen === "welcome" ? (
+        <LandingFooter />
+      ) : (
+        <footer className="footer">
+          {footerNote}
+          <p>Alumno Cero es para practicar con temas elegidos. No reemplaza a tu profe.</p>
+        </footer>
+      )}
       <RewardToast reward={reward} onClose={() => setReward(null)} />
     </div>
   );
