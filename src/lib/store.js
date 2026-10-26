@@ -3,6 +3,7 @@ const KEY = "alumno-cero:v1";
 
 export const initialState = () => ({
   v: 1,
+  sid: null,             // journey id (signed-in users: row in learning_sessions)
   screen: "welcome",
   topicId: null,
   goal: null,            // "examen" | "trabajo" | "curiosidad" | "ensenar"

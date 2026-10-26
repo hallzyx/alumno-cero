@@ -4,17 +4,23 @@ import { useEffect, useRef, useState } from "react";
 import {
   ArrowLeft, ArrowRight, BookCheck, Brain, Check, ClipboardList, Copy, Download, Dumbbell, Gift, Highlighter,
   House, Keyboard, Lightbulb, LoaderCircle, Lock, MessageCircle, MessageCircleQuestionMark, Mic, PencilLine,
-  Printer, RotateCcw, Search, SlidersHorizontal, Sparkles, Square, Star, Target, TriangleAlert, Trophy, Users, X,
+  Calculator, FlaskConical, LogOut, Printer, RotateCcw, Search, SlidersHorizontal, Sparkles, Square, Star, Target, TriangleAlert, Trophy, Users, X,
 } from "lucide-react";
 import { LEVELS, TOPICS, getTopic } from "@/lib/topics";
+import { SUBJECTS, subjectOf } from "@/lib/subjects";
+import Mochila from "./Mochila";
+import Hub from "./Hub";
+import Auth from "./Auth";
+import Avatar from "./Avatar";
+import RewardToast from "./RewardToast";
 import { analyze, knownConcepts, pickVariant, questionsFor, reflect, takeExam, validateExplanation } from "@/lib/engine";
 import { clear, initialState, load, save } from "@/lib/store";
 import { startRecording } from "@/lib/audio";
 import { Cero, CeroSays } from "./Cero";
 
-const STEPS = ["welcome", "goal", "frictions", "prefs", "teach", "reading", "reflect", "exam", "result", "practice", "card"];
-const STEP_LABEL = { welcome: "Inicio", goal: "Elige tu tema", frictions: "¿Qué te cuesta?", prefs: "Ajusta a Cero", teach: "Enséñale", reading: "Cero está leyendo", reflect: "Cero te cuenta", exam: "El examen de Cero", result: "Resultado", practice: "Mini-práctica", card: "Tu ficha" };
-const PROGRESS = { welcome: 0, goal: 1, frictions: 2, prefs: 3, teach: 4, reading: 5, reflect: 5, exam: 6, result: 7, practice: 7, card: 8 };
+const STEPS = ["welcome", "auth", "hub", "goal", "frictions", "prefs", "teach", "reading", "reflect", "exam", "result", "practice", "card"];
+const STEP_LABEL = { welcome: "Inicio", auth: "Tu cuenta", hub: "Mi hub", goal: "Elige tu tema", frictions: "¿Qué te cuesta?", prefs: "Ajusta a Cero", teach: "Enséñale", reading: "Cero está leyendo", reflect: "Cero te cuenta", exam: "El examen de Cero", result: "Resultado", practice: "Mini-práctica", card: "Tu ficha" };
+const PROGRESS = { welcome: 0, auth: 0, hub: 0, goal: 1, frictions: 2, prefs: 3, teach: 4, reading: 5, reflect: 5, exam: 6, result: 7, practice: 7, card: 8 };
 const TOTAL = 8;
 // One icon + short name per station of the path (stations 1..8).
 const STATIONS = [
@@ -77,7 +83,11 @@ export default function AlumnoCero() {
   const [cero, setCero] = useState({ status: "idle", text: "" }); // LLM reading of the explanation
   const [srOk, setSrOk] = useState(false);
   const [busy, setBusy] = useState(null); // null | "analyze" | "exam": AI grading in flight
+  const [learner, setLearner] = useState(null); // signed-in account (null = anonymous / local only)
+  const [dbOk, setDbOk] = useState(true);
+  const [reward, setReward] = useState(null);
   const pending = useRef(false);
+  const syncTimer = useRef(null);
   const rec = useRef(null);
   const lastScreen = useRef(null);
   const mainRef = useRef(null);
@@ -86,20 +96,59 @@ export default function AlumnoCero() {
   const set = (patch) => setState((s) => ({ ...s, ...(typeof patch === "function" ? patch(s) : patch) }));
   const topic = getTopic(state.topicId);
   const level = LEVELS[state.level] ?? LEVELS.companero;
+  const subject = subjectOf(topic);
 
   useEffect(() => {
     setState(load());
     setSrOk(Boolean(SR));
     setHydrated(true);
     fetch("/api/status").then((r) => r.json()).then(setAi).catch(() => {});
+    fetch("/api/me")
+      .then(async (r) => {
+        const j = await r.json().catch(() => ({}));
+        if (r.status === 503 || j.dbOk === false) return setDbOk(false);
+        if (j.learner) {
+          setLearner(j.learner);
+          // When signed in, the database is the source of truth.
+          setState(j.state ? { ...initialState(), ...j.state } : { ...initialState(), screen: "hub" });
+        }
+      })
+      .catch(() => setDbOk(false));
   }, []);
 
   useEffect(() => {
-    if (hydrated) setStorageOk(save(state));
-  }, [state, hydrated]);
+    if (hydrated && !learner) setStorageOk(save(state));
+  }, [state, hydrated, learner]);
+
+  // Signed in: mirror the live state into MySQL (debounced). Browsing screens don't create a journey.
+  useEffect(() => {
+    if (!learner || !state.topicId || ["welcome", "auth", "hub", "goal"].includes(state.screen)) return;
+    if (!state.sid) { set({ sid: crypto.randomUUID() }); return; }
+    clearTimeout(syncTimer.current);
+    syncTimer.current = setTimeout(() => pushState(state), 700);
+    return () => clearTimeout(syncTimer.current);
+  }, [state, learner]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const pushState = (s) =>
+    fetch("/api/state", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sid: s.sid, state: s }) }).catch(() => {});
+
+  // Permanent history + XP. Flushes the snapshot first so the journey row exists.
+  async function track(snapshot, type, payload) {
+    if (!learner || !snapshot.sid) return;
+    try {
+      await pushState(snapshot);
+      const r = await fetch("/api/events", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type, sid: snapshot.sid, payload }) });
+      const j = await r.json();
+      if (r.ok && j.reward) {
+        setReward(j.reward);
+        setLearner((l) => (l ? { ...l, level: j.reward.level } : l));
+      }
+    } catch { /* offline: the snapshot sync will catch up */ }
+  }
 
   // Guards: never render a screen whose data is missing (e.g. after a corrupted/partial save).
   let screen = STEPS.includes(state.screen) ? state.screen : "welcome";
+  if (screen === "hub" && !learner) screen = "welcome";
   const need = { reading: "analysis", reflect: "analysis", exam: "exam", result: "exam", practice: "practice", card: "mastered" };
   if (["frictions", "prefs", "teach"].includes(screen) && !state.topicId) screen = "welcome";
   else if (need[screen] && !state[need[screen]]) screen = state.topicId ? "teach" : "welcome";
@@ -128,11 +177,38 @@ export default function AlumnoCero() {
     return [`ALUMNO CERO — Ficha de dominio: ${topic.title}`, "", "Mi explicación (ya corregida):", m.text, "", "Conceptos que Cero usó correctamente:", ...m.concepts.map((c) => `- ${c}`), "", `Acción para esta semana: ${topic.action}`, "", `Referencia: ${topic.reference.label} — ${topic.reference.url}`].join("\n");
   };
 
+  const insertText = (t) => {
+    set((s) => ({ text: `${s.text}${s.text && !/\s$/.test(s.text) ? " " : ""}${t}` }));
+    setTimeout(() => document.getElementById("explanation")?.focus(), 0);
+  };
+
   const actions = {
-    home: () => go("welcome"),
-    start: () => go("goal"),
+    home: () => go(learner ? "hub" : "welcome"),
+    start: () => go(learner ? "hub" : dbOk ? "auth" : "goal"),
+    authDone: async () => {
+      const j = await fetch("/api/me").then((r) => r.json());
+      setLearner(j.learner);
+      setDbOk(true);
+      setState({ ...initialState(), level: state.level, screen: "hub" });
+      setFlash(null);
+      window.scrollTo({ top: 0 });
+    },
+    logout: async () => {
+      await fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
+      clear(); setLearner(null); setReward(null); setState(initialState()); setFlash(null);
+    },
+    continueSession: async (sid) => {
+      const r = await fetch(`/api/state?sid=${sid}`);
+      const j = await r.json();
+      if (r.ok) { setState({ ...initialState(), ...j.state, sid }); setFlash(null); window.scrollTo({ top: 0 }); }
+    },
+    startTopic: (topicId) => {
+      setState({ ...initialState(), level: state.level, topicId, sid: crypto.randomUUID(), screen: "goal" });
+      setFlash(null);
+      window.scrollTo({ top: 0 });
+    },
     resume: () => go(state.mastered ? "card" : state.analysis ? "reflect" : "teach"),
-    back: () => { const prev = { goal: "welcome", frictions: "goal", prefs: "frictions", teach: "prefs" }[screen]; if (prev) go(prev); },
+    back: () => { const prev = { goal: learner ? "hub" : "welcome", frictions: "goal", prefs: "frictions", teach: "prefs" }[screen]; if (prev) go(prev); },
     reset: () => {
       if (!confirm("¿Borrar tu progreso en este navegador y empezar de nuevo?")) return;
       clear(); setState(initialState()); setFlash(null);
@@ -185,15 +261,24 @@ export default function AlumnoCero() {
       go("exam");
     },
     seeResult: () => {
-      set({ history: [...state.history, { attempt: state.attempt + 1, passed: state.exam.passed, variantId: state.exam.variantId, at: Date.now() }], attempt: state.attempt + 1 });
+      const next = { history: [...state.history, { attempt: state.attempt + 1, passed: state.exam.passed, variantId: state.exam.variantId, at: Date.now() }], attempt: state.attempt + 1 };
+      set(next);
       go("result");
+      track({ ...state, ...next, screen: "result" }, "attempt", { attemptNo: next.attempt, variantId: state.exam.variantId, explanation: state.text, analysis: state.analysis, exam: state.exam, passed: state.exam.passed });
     },
     finish: () => {
-      set({ mastered: { text: state.text, concepts: knownConcepts(topic, state.analysis).map((c) => c.label), at: Date.now() } });
+      const mastered = { text: state.text, concepts: knownConcepts(topic, state.analysis).map((c) => c.label), at: Date.now() };
+      set({ mastered });
       go("card");
+      track({ ...state, mastered, screen: "card" }, "mastered", { explanation: mastered.text, concepts: mastered.concepts, attempts: state.history.length });
     },
     startPractice: () => { set({ practice: { conceptId: state.exam.blame.conceptId, index: 0, answers: [] } }); go("practice"); },
-    practiceAnswer: (i) => set((s) => { const answers = [...s.practice.answers]; answers[s.practice.index] = i; return { practice: { ...s.practice, answers } }; }),
+    practiceAnswer: (i) => {
+      const p = state.practice;
+      const q = (topic.practice[p.conceptId] ?? [])[p.index];
+      if (q && i === q.correct) track(state, "practice", { key: `${p.conceptId}:${p.index}` });
+      set((s) => { const answers = [...s.practice.answers]; answers[s.practice.index] = i; return { practice: { ...s.practice, answers } }; });
+    },
     practiceNext: () => {
       const bank = topic.practice[state.practice.conceptId] ?? [];
       if (state.practice.index + 1 < bank.length) set((s) => ({ practice: { ...s.practice, index: s.practice.index + 1 } }));
@@ -281,7 +366,8 @@ export default function AlumnoCero() {
               <p className="lead">Cero solo sabe lo que tú le explicas. Después hace un examen nuevo: si falla, te muestra la frase tuya que lo confundió.</p>
               <div className="cta-row cta-hero">
                 <Btn cls="btn-primary btn-lg" onClick={actions.start} testid="start">¡Empezar! <span className="btn-hint">2 min</span> <I as={ArrowRight} /></Btn>
-                {hasProgress && <Btn cls="btn-secondary btn-lg" onClick={actions.resume} testid="resume"><I as={RotateCcw} /> Seguir donde quedé</Btn>}
+                {hasProgress && !learner && <Btn cls="btn-secondary btn-lg" onClick={actions.resume} testid="resume"><I as={RotateCcw} /> Seguir donde quedé</Btn>}
+                {!learner && dbOk && <Btn cls="btn-secondary btn-lg" onClick={() => go("auth")} testid="welcome-login">Ya tengo cuenta</Btn>}
               </div>
               <ul className="trust" aria-label="Lo bueno de Alumno Cero">
                 <li><I as={Gift} size={18} /> Gratis y sin registro</li>
@@ -320,21 +406,36 @@ export default function AlumnoCero() {
       );
     },
 
+    auth() {
+      return <Auth dbOk={dbOk} onDone={actions.authDone} onSkip={() => go("goal")} />;
+    },
+
+    hub() {
+      return <Hub onContinue={actions.continueSession} onStartTopic={actions.startTopic} />;
+    },
+
     goal() {
       return (
         <section aria-labelledby="h-goal">
           <CeroSays mood="curioso">¡Hola! Soy Cero y no sé nada de nada. ¿Qué me vas a enseñar hoy?</CeroSays>
           <h1 id="h-goal">Elige un tema</h1>
-          <fieldset className="cards cards-topics" data-testid="topics">
+          <fieldset className="topics-by-subject" data-testid="topics">
             <legend className="sr-only">Tema</legend>
-            {TOPICS.map((t) => (
-              <Choice key={t.id} name="topic" value={t.id} checked={state.topicId === t.id} onChange={() => {
-                if (state.topicId !== t.id) set({ topicId: t.id, text: "", analysis: null, exam: null, history: [], attempt: 0 });
-                setFlash(null);
-              }}>
-                <span className="choice-emoji" aria-hidden="true">{t.emoji}</span>
-                <span className="choice-text"><strong>{t.title}</strong><small>{t.blurb}</small></span>
-              </Choice>
+            {Object.values(SUBJECTS).map((sub) => (
+              <div key={sub.id} className={`subject-group subject-${sub.tone}`}>
+                <h2 className="subject-title">{sub.id === "matematica" ? <Calculator size={22} strokeWidth={2.5} aria-hidden="true" /> : <FlaskConical size={22} strokeWidth={2.5} aria-hidden="true" />} {sub.name} <small>{sub.tagline}</small></h2>
+                <div className="cards cards-topics">
+                  {TOPICS.filter((t) => t.subject === sub.id).map((t) => (
+                    <Choice key={t.id} name="topic" value={t.id} checked={state.topicId === t.id} onChange={() => {
+                      if (state.topicId !== t.id) set({ topicId: t.id, sid: crypto.randomUUID(), text: "", analysis: null, exam: null, history: [], attempt: 0, mastered: null, practice: null });
+                      setFlash(null);
+                    }}>
+                      <span className="choice-emoji" aria-hidden="true">{t.emoji}</span>
+                      <span className="choice-text"><strong>{t.title}</strong><small>{t.blurb}</small></span>
+                    </Choice>
+                  ))}
+                </div>
+              </div>
             ))}
           </fieldset>
           <h2>¿Para qué lo quieres aprender?</h2>
@@ -447,8 +548,13 @@ export default function AlumnoCero() {
           <CeroSays mood={state.attempt > 0 ? "pensando" : "curioso"}><strong>{level.name}:</strong> {level.intro}</CeroSays>
           <h1 id="h-teach">Enséñale: {topic.title}</h1>
           <p className="lead">{topic.starter}</p>
+          <div className={`subject-help subject-${subject.tone}`} data-testid="subject-help"><span className="subject-ico" aria-hidden="true">{subject.mode === "steps" ? <Calculator size={22} strokeWidth={2.5} /> : <FlaskConical size={22} strokeWidth={2.5} />}</span><p><strong>{subject.teach.title}.</strong> {subject.teach.help}</p></div>
+          <Mochila topic={topic} onInsert={insertText} />
           {callout && <div className="callout" data-testid="retry-callout"><span className="callout-ico"><I as={Highlighter} /></span><p><strong>Para corregir:</strong> {callout}</p></div>}
           <label htmlFor="explanation" className="label"><I as={PencilLine} size={20} /> Tu explicación</label>
+          <div className="starters" role="group" aria-label="Para empezar a escribir">
+            {subject.teach.starters.map((st) => <button key={st.label} type="button" className="starter" onClick={() => insertText(st.text)}>{st.label}</button>)}
+          </div>
           <textarea id="explanation" className="notebook" data-testid="explanation" rows={9} placeholder={topic.hint} aria-describedby="teach-help" value={state.text} onChange={(e) => set({ text: e.target.value })} />
           <div className={`wordmeter ${words >= MIN_WORDS ? "is-full" : ""}`} aria-hidden="true"><span style={{ width: `${pct}%` }} /></div>
           <p id="teach-help" className="note"><strong><span id="wordcount">{words}</span> palabras</strong> · Intenta llegar a {MIN_WORDS}. Cero solo usará lo que escribas aquí.</p>
@@ -540,6 +646,7 @@ export default function AlumnoCero() {
           {e.fallback && <p className="note">La IA no dio un razonamiento verificable, así que el examen usó el modo básico.</p>}</div>
           <div className="exam-paper"><span className="tape tape-tc" aria-hidden="true" /><p>{v.context}</p><p className="exam-q"><strong>{v.question}</strong></p></div>
           <h2>Así lo resuelve Cero <small className="h-sub">(solo con lo que le enseñaste)</small></h2>
+          <p className="note">{subject.exam.intro}</p>
           <ol className="steps" data-testid="steps">
             {e.steps.map((s, i) => (
               <li key={i} className={s.ok ? "ok" : "bad"}><span className={`badge ${s.ok ? "badge-ok" : "badge-warn"}`}><I as={s.ok ? Check : TriangleAlert} size={16} /> {s.ok ? "Tú me lo enseñaste" : s.source === "user-wrong" ? "Eso me dijiste" : "Me faltó información"}</span> {s.text}</li>
@@ -681,11 +788,13 @@ export default function AlumnoCero() {
           <span className="brand-name">Alumno <span>Cero</span></span>
         </a>
         <div className="topbar-right">
+          {learner && <button className="btn btn-ghost btn-sm chip-me" onClick={() => go("hub")} aria-label={`Mi hub: nivel ${learner.level.n}`} data-testid="me-chip"><Avatar id={learner.avatar} size={28} /><span className="btn-label">Nv {learner.level.n}</span></button>}
           {canBack && <button className="btn btn-ghost btn-sm" onClick={actions.back}><I as={ArrowLeft} size={20} /> Atrás</button>}
-          {screen !== "welcome" && <button className="btn btn-ghost btn-sm" onClick={actions.reset} title="Borra tu progreso de este navegador"><I as={RotateCcw} size={20} /><span className="btn-label">Empezar de nuevo</span></button>}
+          {learner && <button className="btn btn-ghost btn-sm" onClick={actions.logout} data-testid="logout"><I as={LogOut} size={20} /><span className="btn-label">Salir</span></button>}
+          {!["welcome", "auth", "hub"].includes(screen) && <button className="btn btn-ghost btn-sm" onClick={actions.reset} title="Borra tu progreso de este navegador"><I as={RotateCcw} size={20} /><span className="btn-label">Empezar de nuevo</span></button>}
         </div>
       </header>
-      {screen !== "welcome" && (
+      {!["welcome", "auth", "hub"].includes(screen) && (
         <div className="progress" role="progressbar" aria-label="Progreso" aria-valuemin={0} aria-valuemax={TOTAL} aria-valuenow={step} aria-valuetext={`Paso ${step} de ${TOTAL}: ${STEP_LABEL[screen]}`}>
           <ol className="path" aria-hidden="true">
             {STATIONS.map((s, i) => {
@@ -709,7 +818,7 @@ export default function AlumnoCero() {
       </main>
       <footer className="footer">
         <p>
-          <strong>Tu progreso se queda aquí:</strong> se guarda solo en este navegador, sin cuentas.{" "}
+          <strong>{learner ? "Tu progreso está a salvo:" : "Tu progreso se queda aquí:"}</strong> {learner ? "tu nivel, insignias y fichas se guardan en tu cuenta." : "sin cuenta, se guarda solo en este navegador."}{" "}
           {ai.configured
             ? "Para leer tu explicación, hacer el examen y dictar por voz, Cero envía tu texto o tu audio a OpenRouter (IA). Si la IA falla, usa un modo básico en tu equipo."
             : "Tus explicaciones no se envían a ningún servidor."}
@@ -717,6 +826,7 @@ export default function AlumnoCero() {
         </p>
         <p>Alumno Cero es para practicar con temas elegidos. No reemplaza a tu profe.</p>
       </footer>
+      <RewardToast reward={reward} onClose={() => setReward(null)} />
     </div>
   );
 }

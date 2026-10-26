@@ -5,6 +5,7 @@
 // the test-suite (and offered as a last resort after repeated failures).
 
 import { formatMoney } from "./engine.js";
+import { rule, water } from "./topics-extra.js";
 
 const fmt = formatMoney;
 
@@ -53,6 +54,7 @@ function solveCompound(v, st) {
 
 const compound = {
   id: "interes-compuesto",
+  subject: "matematica",
   title: "Interés compuesto",
   emoji: "💸",
   blurb: "Por qué una deuda o un ahorro crece cada vez más rápido.",
@@ -202,6 +204,7 @@ function solveDiscounts(v, st) {
 
 const discounts = {
   id: "descuentos-sucesivos",
+  subject: "matematica",
   title: "Descuentos sucesivos",
   emoji: "🏷️",
   blurb: "Por qué 30% + 20% de descuento no es 50%.",
@@ -307,6 +310,7 @@ function solvePhoto(v, st) {
 
 const photosynthesis = {
   id: "fotosintesis",
+  subject: "ciencias",
   title: "Fotosíntesis",
   emoji: "🌱",
   blurb: "De dónde sale realmente la «comida» de una planta.",
@@ -433,7 +437,7 @@ const photosynthesis = {
     "La fotosíntesis es cómo la planta fabrica su alimento. La planta toma CO₂ del aire, y de ahí sale el carbono de su masa, no de la tierra. Las raíces absorben agua, que es otra materia prima. La luz del sol aporta la energía necesaria, y sin luz no se fabrica nada. El resultado es glucosa, que es su alimento, y oxígeno que se libera al aire.",
 };
 
-export const TOPICS = [compound, discounts, photosynthesis];
+export const TOPICS = [compound, discounts, rule, photosynthesis, water];
 export const getTopic = (id) => TOPICS.find((t) => t.id === id) ?? null;
 
 export const LEVELS = {

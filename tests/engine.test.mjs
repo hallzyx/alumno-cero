@@ -60,3 +60,30 @@ test("accents and punctuation do not matter", () => {
   assert.equal(a.states.base, "known");
   assert.equal(a.states.repeat, "known");
 });
+
+test("regla de tres: sumar la diferencia falla y se señala; el modelo aprueba", () => {
+  const t = getTopic("regla-de-tres");
+  const bad = "Si 3 cuadernos cuestan 12, para 7 se suma la misma cantidad que falta. Se le suma la diferencia al precio.";
+  const exam = takeExam(t, t.variants[0], analyze(t, bad));
+  assert.equal(exam.passed, false);
+  assert.equal(exam.blame.conceptId, "ratio");
+  const ok = takeExam(t, t.variants[0], analyze(t, t.modelExplanation));
+  assert.equal(ok.passed, true);
+  assert.equal(ok.answerText, "S/ 28.00");
+});
+
+test("ciclo del agua: 'desaparece' falla y se señala la frase", () => {
+  const t = getTopic("ciclo-del-agua");
+  const a = analyze(t, "Cuando el sol calienta un charco el agua desaparece y deja de existir. Las nubes sueltan lluvia cuando las gotas pesan.");
+  const exam = takeExam(t, t.variants[0], a);
+  assert.equal(exam.passed, false);
+  assert.match(exam.blame.sentence, /desaparece/);
+});
+
+test("every topic declares a subject and has resources", async () => {
+  const { RESOURCES } = await import("../src/lib/resources.js");
+  for (const t of TOPICS) {
+    assert.ok(["matematica", "ciencias"].includes(t.subject), t.id);
+    assert.ok(RESOURCES[t.id]?.glossary.length, t.id);
+  }
+});

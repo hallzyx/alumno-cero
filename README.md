@@ -53,15 +53,22 @@ Bienvenida con resultado a la vista → objetivo (tema + para qué) → friccion
 4. **Practicar este punto** → corrige tu explicación («el interés se calcula sobre el saldo acumulado, con los intereses ya ganados») → examen aprobado → **ficha de dominio**.
 5. Casos límite: texto vacío, muy corto o de otro tema muestran un mensaje y permiten continuar; recargar la página conserva el progreso.
 
+## Hub digital (cuentas, niveles y recursos)
+
+- **Cuentas:** usuario + contraseña (hash `scrypt`, sesión en cookie `httpOnly`). Sin correo: pensado para chicos de colegio. También se puede usar sin cuenta (progreso solo en el navegador).
+- **Base de datos MySQL/MariaDB** (`root`, sin contraseña, puerto `33065`; la base `alumno_cero` y sus tablas se crean solas): `learners`, `auth_sessions`, `learning_sessions` (retomar donde lo dejaste), `attempts` (cada examen con su análisis), `mastery_cards`, `xp_log`, `badges`.
+- **Gamificación:** XP por examen, aprobar, aprobar al primer intento, ficha de dominio, práctica y primer estudio del día; 10 niveles con títulos escolares; racha de días; 10 insignias. Todo se calcula en el servidor y es idempotente (no se puede ganar dos veces el mismo XP).
+- **Materias y experiencia distinta:** *Matemática* (procedimiento paso a paso, simuladores interactivos) y *Ciencias* (causas y porqués, diagramas que se tocan). Cada tema trae su «mochila»: glosario, ejemplo resuelto, truco y simulador/diagrama. 5 temas: interés compuesto, descuentos sucesivos, regla de tres, fotosíntesis y ciclo del agua.
+
 ## Datos y privacidad
 
-El progreso se guarda en `localStorage` (clave `alumno-cero:v1`); «Empezar de nuevo» lo borra. No hay cuentas ni analítica. La API key vive solo en el servidor (`.env`) y nunca llega al navegador.
+Con cuenta, tu progreso, fichas y texto de los exámenes se guardan en la base de datos. Sin cuenta, solo en `localStorage` (clave `alumno-cero:v1`). La API key de OpenRouter vive solo en el servidor (`.env`).
 
 ## Desarrollo (Next.js)
 
 ```bash
 npm install
-cp .env.example .env     # y pega tu OPENROUTER_API_KEY
+cp .env.example .env     # y pega tu OPENROUTER_API_KEY; ajusta DB_* si tu MySQL no es root/33065
 npm run dev              # http://localhost:3000
 npm test                 # pruebas del motor
 npm run build && npm start
