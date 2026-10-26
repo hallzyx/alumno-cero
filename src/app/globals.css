@@ -853,7 +853,7 @@ blockquote.blame { margin: 0; font-size: clamp(1.25rem, 1.05rem + 1vw, 1.6rem); 
   #app { max-width: 920px; padding-inline: 28px; }
   #app[data-screen="welcome"] { max-width: 1120px; }
   #app[data-screen="hub"], #app[data-screen="goal"], #app[data-screen="teach"] { max-width: 1180px; }
-  .sheet { padding: 32px 40px 36px; }
+  .sheet { padding: 32px 40px 36px 72px; }
 }
 
 @media (min-width: 1000px) {
