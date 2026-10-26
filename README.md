@@ -4,7 +4,7 @@
 
 Entrega para **Órbita LATAM · Reto Calentamiento (1K)** · Categoría *Educational apps* · B2C.
 
-- **MVP:** https://hallzyx.github.io/alumno-cero/ (GitHub Pages)
+- **MVP:** https://hallzyx.github.io/alumno-cero/ (versión estática original en GitHub Pages)
 - **Video de funcionamiento (≤ 5 min):** _pendiente de enlazar antes de entregar_
 - **Acceso:** público, sin registro ni credenciales.
 
@@ -27,15 +27,19 @@ Entrega para **Órbita LATAM · Reto Calentamiento (1K)** · Categoría *Educati
 - Chase, C. C., Chin, D. B., Oppezzo, M. A., & Schwartz, D. L. (2009). *Teachable Agents and the Protégé Effect: Increasing the Effort Towards Learning.* Journal of Science Education and Technology. https://purl.stanford.edu/zm369yx3532
 - Cada tema enlaza además su propia referencia en la ficha (SBS Perú, INDECOPI, experimento de Van Helmont).
 
-## Cómo funciona por dentro (y su límite)
+## Cómo funciona por dentro (IA al centro)
 
-Cero **no es un LLM**. Es un motor determinista (`src/engine.js`) que detecta, mediante patrones, qué conceptos y qué malentendidos frecuentes aparecen en tu explicación, y un resolutor por tema (`src/topics.js`) que solo aplica los pasos que tú enseñaste. Ventajas: funciona **sin conexión**, **no envía tus textos a ningún servidor** y su comportamiento es verificable con pruebas.
+Con la key de OpenRouter en `.env`, la IA hace el trabajo principal; sin key (o si falla) entra el **modo básico** local:
+
+1. **Análisis (`/api/analyze`):** un LLM decide, para cada idea del tema, si el estudiante la dijo bien, mal o no la dijo. Debe citar un fragmento literal de su texto.
+2. **Examen (`/api/exam`):** Cero (el LLM) resuelve un problema nuevo usando solo lo que el estudiante enseñó; las ideas faltantes o erróneas se aplican como suposición/error.
+3. **Contra alucinaciones:** temperatura 0, salida JSON cerrada, lista cerrada de ideas, el modelo nunca ve la respuesta correcta, y el servidor valida todo: la cita debe existir palabra por palabra en el texto (si no, la idea cuenta como no dicha), y la aritmética/respuesta se verifica contra el solver del tema (`src/lib/topics.js`). Si no valida tras 2 intentos, se usa el motor determinista (`src/lib/engine.js`) y la UI lo indica.
+4. **Extras:** dictado por voz (`/api/transcribe`, `OPENROUTER_VOICE_MODEL`) y «Cero con IA» (`/api/cero`), un comentario en personaje. Los modelos de texto usan `OPENROUTER_WRITING_MODEL`.
 
 **Límites declarados:**
-- Hay **3 temas curados**; el motor reconoce un conjunto finito de formulaciones y malentendidos. Si dices algo correcto con palabras muy inusuales, Cero puede decir que «no se lo dijiste».
-- No sustituye a un docente ni evalúa comprensión en general.
-- El dictado por voz usa la API del navegador (puede enviar audio al proveedor del navegador); es opcional y solo se activa al pulsar «Dictar».
-- El contenido de ejemplo del botón «Cargar ejemplo de demo» está marcado como demo.
+- Hay **3 temas curados**. La IA puede equivocarse al juzgar; por eso es estricta (ante la duda, «no lo dijiste») y la práctica corrige.
+- No sustituye a un docente.
+- Con la key activa, el texto y el audio salen a OpenRouter; sin key, nada sale del dispositivo.
 
 ## Onboarding (guía oficial adaptada)
 
@@ -51,16 +55,23 @@ Bienvenida con resultado a la vista → objetivo (tema + para qué) → friccion
 
 ## Datos y privacidad
 
-Todo el progreso se guarda en `localStorage` de tu navegador (clave `alumno-cero:v1`); «Empezar de nuevo» lo borra. No hay cuentas, servidor ni analítica.
+El progreso se guarda en `localStorage` (clave `alumno-cero:v1`); «Empezar de nuevo» lo borra. No hay cuentas ni analítica. La API key vive solo en el servidor (`.env`) y nunca llega al navegador.
 
-## Desarrollo
+## Desarrollo (Next.js)
 
 ```bash
-python3 -m http.server 8123          # sirve el sitio estático
-node --test tests/engine.test.mjs    # pruebas del motor
-node tests/e2e.mjs http://localhost:8123/   # recorrido completo (requiere Playwright)
+npm install
+cp .env.example .env     # y pega tu OPENROUTER_API_KEY
+npm run dev              # http://localhost:3000
+npm test                 # pruebas del motor
+npm run build && npm start
 ```
+
+Estructura: `src/app` (páginas y rutas `api/`), `src/components` (UI React), `src/lib` (motor, temas, almacenamiento, cliente OpenRouter, grabación de audio), `public` (fuentes y manifest).
+Variables en `.env`: `OPENROUTER_API_KEY`, `OPENROUTER_VOICE_MODEL`, `OPENROUTER_WRITING_MODEL`. El modelo de voz debe aceptar audio de entrada.
+
+Nota: al migrar a Next.js se eliminó el service worker (el modo 100 % offline del MVP estático); el examen y el análisis siguen corriendo en el cliente.
 
 ## Aporte propio y herramientas
 
-Idea, producto y dirección de Brayan Ccarita. Se usaron asistentes de IA (Claude) para generar buena parte del código y del diseño, con pruebas automáticas del motor y del recorrido completo. Sin dependencias de runtime ni componentes de terceros.
+Idea, producto y dirección de Brayan Ccarita. Se usaron asistentes de IA (Claude) para generar buena parte del código y del diseño, con pruebas automáticas del motor y del recorrido completo. Dependencias de runtime: Next.js y React.

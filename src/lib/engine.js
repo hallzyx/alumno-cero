@@ -140,7 +140,7 @@ export function takeExam(topic, variant, analysis) {
   return { ...result, variantId: variant.id, blame };
 }
 
-function buildBlame(topic, analysis, conceptId, result) {
+export function buildBlame(topic, analysis, conceptId, result) {
   const concept = topic.concepts.find((c) => c.id === conceptId);
   const state = analysis.states[conceptId];
   const ev = analysis.evidence[conceptId];

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { TOPICS, getTopic } from "../src/topics.js";
-import { analyze, validateExplanation, takeExam, pickVariant } from "../src/engine.js";
+import { TOPICS, getTopic } from "../src/lib/topics.js";
+import { analyze, validateExplanation, takeExam, pickVariant } from "../src/lib/engine.js";
 
 const compound = getTopic("interes-compuesto");
 
