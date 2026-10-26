@@ -118,6 +118,7 @@ const compound = {
           ["cada ano", "cada mes", "cada periodo", "todos los anos", "todos los meses", "ano tras ano", "ano a ano", "mes a mes", "se repite", "repite", "vuelve a", "de nuevo", "otra vez", "periodo tras periodo", "sucesiv", "cada vez"],
           ["interes", "intereses", "calcul", "crece", "aumenta", "sube", "gana", "paga", "cobra"],
         ],
+        [["se repite", "se repiten", "repite", "vuelve a", "de nuevo", "otra vez"], ["cada ano", "cada mes", "cada periodo", "todos los anos", "todos los meses", "ano tras ano", "mes a mes", "mientras dure"]],
       ],
       misconceptions: [
         {

@@ -48,22 +48,41 @@ function setFlash(kind, text) { flash = { kind, text }; render(); }
 
 /* ----------------------------- shared pieces ----------------------------- */
 
+// Cero is literally a zero: an oval "0" with a face. Moods: curioso, pensando, feliz, confundido.
+const CERO_FACE = {
+  curioso: `<circle cx="27" cy="32" r="3.6" class="c-eye"/><circle cx="45" cy="32" r="3.6" class="c-eye"/><path d="M22 23 q5 -4 10 -1" class="c-line"/><path d="M41 21 q5 -2 9 1" class="c-line"/><ellipse cx="36" cy="46" rx="3.2" ry="3.8" class="c-line"/>`,
+  pensando: `<circle cx="30" cy="30" r="3.2" class="c-eye"/><circle cx="48" cy="30" r="3.2" class="c-eye"/><path d="M25 24 q5 -2 10 0" class="c-line"/><path d="M42 19 q5 -4 10 -1" class="c-line"/><path d="M31 48 q4 -2 9 0" class="c-line"/><circle cx="62" cy="14" r="2.2" class="c-drop"/><circle cx="67" cy="7" r="1.4" class="c-drop"/>`,
+  feliz: `<path d="M22 33 q5 -6 10 0" class="c-line"/><path d="M40 33 q5 -6 10 0" class="c-line"/><path d="M25 43 q11 11 22 0" class="c-line"/><circle cx="20" cy="41" r="3" class="c-cheek"/><circle cx="52" cy="41" r="3" class="c-cheek"/>`,
+  confundido: `<circle cx="27" cy="32" r="4.4" class="c-eye"/><circle cx="46" cy="33" r="2.4" class="c-eye"/><path d="M21 27 l11 -5" class="c-line"/><path d="M41 21 q6 -1 10 5" class="c-line"/><path d="M25 48 q4 -4 7 0 t7 0 t7 0" class="c-line"/><path d="M58 16 q3 5 0 7 q-3 -2 0 -7z" class="c-drop"/>`,
+};
+const CERO_LABEL = { curioso: "curioso", pensando: "pensando", feliz: "feliz", confundido: "confundido" };
+
+function cero(mood = "curioso", cls = "") {
+  return `<span class="cero cero-${mood} ${cls}" data-testid="cero" data-mood="${mood}" role="img" aria-label="Cero, ${CERO_LABEL[mood]}">
+    <svg viewBox="0 0 72 72" aria-hidden="true" focusable="false"><ellipse cx="36" cy="37" rx="25" ry="31" class="c-body"/><ellipse cx="36" cy="37" rx="25" ry="31" class="c-ring"/>${CERO_FACE[mood]}</svg>
+  </span>`;
+}
+
+function ceroSays(mood, html, cls = "") {
+  return `<div class="cero-row ${cls}">${cero(mood)}<p class="bubble">${html}</p></div>`;
+}
+
 function header() {
   const step = PROGRESS[state.screen] ?? 0;
-  const pct = Math.round((step / TOTAL) * 100);
   const canBack = ["goal", "frictions", "prefs", "teach"].includes(state.screen);
+  const segs = Array.from({ length: TOTAL }, (_, i) => `<span class="seg-tick ${i < step ? "done" : ""} ${i === step - 1 ? "now" : ""}"></span>`).join("");
   return `
   <header class="topbar" data-testid="topbar">
-    <a class="brand" href="#" data-action="home" aria-label="Alumno Cero, volver al inicio"><span class="brand-mark" aria-hidden="true">0</span> Alumno Cero</a>
+    <a class="brand" href="#" data-action="home" aria-label="Alumno Cero, volver al inicio"><span class="brand-mark" aria-hidden="true">${cero("curioso").replace('role="img"', "")}</span><span class="brand-name">Alumno Cero</span></a>
     <div class="topbar-right">
-      ${canBack ? `<button class="btn btn-ghost" data-action="back">← Atrás</button>` : ""}
-      ${state.screen !== "welcome" ? `<button class="btn btn-ghost" data-action="reset" title="Borra tu progreso de este navegador">Empezar de nuevo</button>` : ""}
+      ${canBack ? `<button class="btn btn-ghost btn-sm" data-action="back"><span aria-hidden="true">←</span> Atrás</button>` : ""}
+      ${state.screen !== "welcome" ? `<button class="btn btn-ghost btn-sm" data-action="reset" title="Borra tu progreso de este navegador">Empezar de nuevo</button>` : ""}
     </div>
   </header>
   ${state.screen !== "welcome" ? `
   <div class="progress" role="progressbar" aria-label="Progreso" aria-valuemin="0" aria-valuemax="${TOTAL}" aria-valuenow="${step}" aria-valuetext="Paso ${step} de ${TOTAL}: ${STEP_LABEL[state.screen]}">
-    <div class="progress-bar" style="width:${pct}%"></div>
-    <p class="progress-label">Paso ${step} de ${TOTAL} · ${STEP_LABEL[state.screen]}</p>
+    <p class="progress-label"><span class="progress-step">Paso ${step} de ${TOTAL}</span> <span class="progress-name">${STEP_LABEL[state.screen]}</span></p>
+    <div class="progress-track" aria-hidden="true">${segs}</div>
   </div>` : ""}`;
 }
 
@@ -74,7 +93,7 @@ function flashHtml() {
 
 function footer() {
   return `<footer class="footer">
-    <p>Todo se guarda solo en este navegador. Sin cuenta. Sin enviar tus explicaciones a ningún servidor.${storageOk ? "" : " ⚠️ Tu navegador bloquea el almacenamiento: no podré recordar tu progreso."}</p>
+    <p><strong>Tus datos se quedan aquí.</strong> Todo se guarda solo en este navegador. Sin cuenta. Sin enviar tus explicaciones a ningún servidor.${storageOk ? "" : ` <span class="warn-inline">Tu navegador bloquea el almacenamiento: no podré recordar tu progreso.</span>`}</p>
     <p>Alumno Cero es una herramienta de práctica con temas seleccionados, no reemplaza a un docente.</p>
   </footer>`;
 }
@@ -85,16 +104,30 @@ function viewWelcome() {
   const hasProgress = state.topicId && state.screen === "welcome" && (state.text || state.history.length);
   return `
   <section class="hero" aria-labelledby="h-welcome">
-    <p class="eyebrow">Para quien lee, entiende… y aun así falla al aplicarlo</p>
-    <h1 id="h-welcome">Aprende enseñándole a una IA que <em>no sabe nada</em>.</h1>
-    <p class="lead">Explícale un tema a Cero. Él solo puede usar <strong>lo que tú le digas</strong>. Si se equivoca en un problema nuevo, te muestra <strong>qué frase tuya</strong> lo confundió.</p>
-    <div class="cta-row">
-      <button class="btn btn-primary btn-lg" data-action="start" data-testid="start">Empezar (2 minutos)</button>
-      ${hasProgress ? `<button class="btn btn-secondary btn-lg" data-action="resume" data-testid="resume">Continuar donde lo dejé</button>` : ""}
+    <div class="hero-copy">
+      <h1 id="h-welcome" class="display">Enséñale a Cero. Su error te muestra el tuyo.</h1>
+      <p class="lead">Cero es una IA que solo sabe lo que tú le explicas. Resuelve un problema nuevo con tu explicación y, si falla, señala la frase tuya que lo confundió.</p>
+      <dl class="pitch" data-testid="value-prop">
+        <div><dt>Para quién</dt><dd>Estudiantes que leen un tema, lo entienden… y se traban al aplicarlo.</dd></div>
+        <div><dt>El problema</dt><dd>Releer da sensación de dominio, pero nadie te dice dónde está tu error.</dd></div>
+        <div><dt>Lo que te llevas</dt><dd>Tu frase equivocada señalada, una práctica corta y una ficha con tu explicación corregida.</dd></div>
+      </dl>
+      <div class="cta-row">
+        <button class="btn btn-primary btn-lg" data-action="start" data-testid="start">Empezar (2 minutos)</button>
+        ${hasProgress ? `<button class="btn btn-secondary btn-lg" data-action="resume" data-testid="resume">Continuar donde lo dejé</button>` : ""}
+      </div>
+      <ul class="trust" aria-label="Garantías">
+        <li>Gratis y sin registro</li><li>Funciona sin conexión una vez cargada</li><li>Tus datos no salen de tu dispositivo</li>
+      </ul>
     </div>
-    <ul class="trust" aria-label="Garantías">
-      <li>Gratis y sin registro</li><li>Funciona sin conexión una vez cargada</li><li>Tus datos no salen de tu dispositivo</li>
-    </ul>
+    <figure class="specimen" aria-label="Ejemplo de lo que verás">
+      <div class="specimen-paper">
+        ${cero("confundido", "cero-lg")}
+        <p class="specimen-quote">«El interés se calcula sobre <mark class="pen">lo que pediste</mark>.»</p>
+        <p class="pen-note" aria-hidden="true">Reprobé por esto que me enseñaste.</p>
+      </div>
+      <figcaption>Ejemplo real de la demo: Cero calculó mal un préstamo y señaló la frase que lo confundió.</figcaption>
+    </figure>
   </section>
   <section class="how" aria-labelledby="h-how">
     <h2 id="h-how">Cómo funciona</h2>
@@ -104,34 +137,35 @@ function viewWelcome() {
       <li><strong>Ves tu hueco.</strong> Si falla, se resalta la frase que lo causó.</li>
       <li><strong>Lo corriges</strong> y te llevas tu ficha de dominio.</li>
     </ol>
-    <p class="note">Referencia: el «efecto protegido» (Chase et al., 2009) muestra que enseñar a un agente aumenta el esfuerzo de aprendizaje. <a href="https://purl.stanford.edu/zm369yx3532" target="_blank" rel="noopener">Ver estudio</a>.</p>
+    <p class="note">Referencia: el «efecto protegido» (Chase et al., 2009) muestra que enseñar a un agente aumenta el esfuerzo de aprendizaje. <a href="https://purl.stanford.edu/zm369yx3532" target="_blank" rel="noopener">Ver estudio<span class="sr-only"> (se abre en otra pestaña)</span></a>.</p>
   </section>`;
 }
 
 function viewGoal() {
   return `
   <section aria-labelledby="h-goal">
+    ${ceroSays("curioso", "Hola, soy Cero. No sé nada de nada. Elige qué me vas a enseñar.")}
     <h1 id="h-goal">¿Qué quieres dominar?</h1>
-    <fieldset class="cards" data-testid="topics">
+    <fieldset class="cards cards-topics" data-testid="topics">
       <legend class="sr-only">Tema</legend>
       ${TOPICS.map((t) => `
       <label class="card choice ${state.topicId === t.id ? "selected" : ""}">
         <input type="radio" name="topic" value="${t.id}" ${state.topicId === t.id ? "checked" : ""} />
         <span class="choice-emoji" aria-hidden="true">${t.emoji}</span>
-        <span><strong>${esc(t.title)}</strong><br /><small>${esc(t.blurb)}</small></span>
+        <span class="choice-text"><strong>${esc(t.title)}</strong><small>${esc(t.blurb)}</small></span>
       </label>`).join("")}
     </fieldset>
     <h2>¿Para qué lo necesitas?</h2>
-    <fieldset class="cards" data-testid="goals">
+    <fieldset class="cards cards-goals" data-testid="goals">
       <legend class="sr-only">Objetivo</legend>
       ${GOALS.map((g) => `
       <label class="card choice ${state.goal === g.id ? "selected" : ""}">
         <input type="radio" name="goal" value="${g.id}" ${state.goal === g.id ? "checked" : ""} />
-        <span>${esc(g.label)}</span>
+        <span class="choice-text">${esc(g.label)}</span>
       </label>`).join("")}
     </fieldset>
     ${flashHtml()}
-    <button class="btn btn-primary" data-action="goal-next" data-testid="goal-next">Continuar</button>
+    <div class="cta-row"><button class="btn btn-primary btn-lg" data-action="goal-next" data-testid="goal-next">Continuar</button></div>
   </section>`;
 }
 
@@ -139,12 +173,13 @@ function viewFrictions() {
   const t = topic();
   return `
   <section aria-labelledby="h-fr">
+    ${ceroSays("curioso", "Cuéntame qué te cuesta. Con eso ajusto el examen que voy a rendir.")}
     <h1 id="h-fr">¿Te pasa algo de esto con «${esc(t.title)}»?</h1>
-    <p class="lead">Responde con «Sí me pasa» o «No». Puedes cambiarlo cuando quieras.</p>
+    <p class="lead">Responde con «Sí me pasa» o «No». Puedes cambiarlo cuando quieras, o saltarte este paso.</p>
     <ul class="friction-list" data-testid="frictions">
       ${FRICTIONS.map((f) => {
         const v = state.frictions[f.id];
-        return `<li class="card friction">
+        return `<li class="card friction ${v === true ? "is-yes" : v === false ? "is-no" : ""}">
           <p>${esc(f.text)}</p>
           <div class="seg" role="group" aria-label="${esc(f.text)}">
             <button class="btn ${v === true ? "btn-primary" : "btn-secondary"}" data-action="friction" data-id="${f.id}" data-val="1" aria-pressed="${v === true}">Sí me pasa</button>
@@ -153,8 +188,10 @@ function viewFrictions() {
         </li>`;
       }).join("")}
     </ul>
-    <button class="btn btn-primary" data-action="fr-next" data-testid="fr-next">Continuar</button>
-    <button class="btn btn-ghost" data-action="fr-next">Omitir</button>
+    <div class="cta-row">
+      <button class="btn btn-primary btn-lg" data-action="fr-next" data-testid="fr-next">Continuar</button>
+      <button class="btn btn-ghost" data-action="fr-next">Omitir este paso</button>
+    </div>
   </section>`;
 }
 
@@ -176,27 +213,26 @@ function viewPrefs() {
   <section aria-labelledby="h-pref">
     <h1 id="h-pref">Elige cómo será Cero</h1>
     <p class="lead">Esta elección cambia de verdad cómo pregunta y qué examen te toca.</p>
-    <fieldset class="cards" data-testid="levels">
+    <fieldset class="cards cards-levels" data-testid="levels">
       <legend class="sr-only">Nivel de Cero</legend>
       ${Object.values(LEVELS).map((l) => `
       <label class="card choice ${state.level === l.id ? "selected" : ""}">
         <input type="radio" name="level" value="${l.id}" ${state.level === l.id ? "checked" : ""} />
-        <span><strong>${esc(l.name)}</strong><br /><small>${esc(l.tag)}</small></span>
+        <span class="choice-text"><strong>${esc(l.name)}</strong><small>${esc(l.tag)}</small></span>
       </label>`).join("")}
     </fieldset>
-    <div class="card preview" aria-live="polite" data-testid="level-preview">
-      <p class="eyebrow">Así preguntará Cero</p>
-      <p class="bubble">«${esc(topic().concepts[1]?.ask[state.level] ?? topic().concepts[0].ask[state.level])}»</p>
+    <div class="preview" aria-live="polite" data-testid="level-preview">
+      ${ceroSays("curioso", `<span class="bubble-kicker">Así preguntará Cero:</span> «${esc(topic().concepts[1]?.ask[state.level] ?? topic().concepts[0].ask[state.level])}»`)}
     </div>
     <h2>Cómo prefieres enseñar</h2>
-    <fieldset class="cards" data-testid="modes">
+    <fieldset class="cards cards-modes" data-testid="modes">
       <legend class="sr-only">Modo de entrada</legend>
-      <label class="card choice ${state.inputMode === "text" ? "selected" : ""}"><input type="radio" name="mode" value="text" ${state.inputMode === "text" ? "checked" : ""} /><span>Escribiendo</span></label>
-      <label class="card choice ${state.inputMode === "voice" ? "selected" : ""} ${speech.supported ? "" : "disabled"}"><input type="radio" name="mode" value="voice" ${state.inputMode === "voice" ? "checked" : ""} ${speech.supported ? "" : "disabled"} /><span>Dictando por voz${speech.supported ? "" : " (no disponible en este navegador)"}</span></label>
+      <label class="card choice ${state.inputMode === "text" ? "selected" : ""}"><input type="radio" name="mode" value="text" ${state.inputMode === "text" ? "checked" : ""} /><span class="choice-text">Escribiendo</span></label>
+      <label class="card choice ${state.inputMode === "voice" ? "selected" : ""} ${speech.supported ? "" : "disabled"}"><input type="radio" name="mode" value="voice" ${state.inputMode === "voice" ? "checked" : ""} ${speech.supported ? "" : "disabled"} /><span class="choice-text">Dictando por voz${speech.supported ? "" : "<small>No disponible en este navegador</small>"}</span></label>
     </fieldset>
-    ${state.inputMode === "voice" ? `<p class="note">🎤 Solo pediré el micrófono cuando pulses «Dictar», para transformar tu voz en texto en tu navegador. Puedes rechazar el permiso y seguir escribiendo.</p>` : ""}
-    ${(bits.length || g) ? `<div class="card plan" data-testid="plan"><p class="eyebrow">Tu sesión personalizada</p><ul>${g ? `<li>${esc(g.cero)}</li>` : ""}${bits.map((b) => `<li>${esc(b)}</li>`).join("")}</ul></div>` : ""}
-    <button class="btn btn-primary" data-action="prefs-next" data-testid="prefs-next">Ir a enseñarle a Cero</button>
+    ${state.inputMode === "voice" ? `<p class="note">Solo pediré el micrófono cuando pulses «Dictar», para transformar tu voz en texto en tu navegador. Puedes rechazar el permiso y seguir escribiendo.</p>` : ""}
+    ${(bits.length || g) ? `<div class="plan" data-testid="plan"><h2 class="plan-title">Tu sesión personalizada</h2><ul>${g ? `<li>${esc(g.cero)}</li>` : ""}${bits.map((b) => `<li>${esc(b)}</li>`).join("")}</ul></div>` : ""}
+    <div class="cta-row"><button class="btn btn-primary btn-lg" data-action="prefs-next" data-testid="prefs-next">Ir a enseñarle a Cero</button></div>
   </section>`;
 }
 
@@ -205,33 +241,36 @@ function viewTeach() {
   const l = level();
   const last = state.history[state.history.length - 1];
   const blame = state.exam?.blame;
-  const hl = blame?.sentence ? `<p class="callout" data-testid="retry-callout"><strong>Para corregir:</strong> la frase «${esc(blame.sentence)}» le enseñó algo incorrecto a Cero. Edítala abajo.</p>` : last && !last.passed && blame ? `<p class="callout" data-testid="retry-callout"><strong>Para corregir:</strong> ${esc(blame.message)}</p>` : "";
+  const hl = blame?.sentence ? `<div class="callout" data-testid="retry-callout"><p><strong>Para corregir:</strong> la frase «<mark class="pen">${esc(blame.sentence)}</mark>» le enseñó algo incorrecto a Cero. Edítala abajo.</p></div>` : last && !last.passed && blame ? `<div class="callout" data-testid="retry-callout"><p><strong>Para corregir:</strong> ${esc(blame.message)}</p></div>` : "";
   return `
   <section aria-labelledby="h-teach">
-    <div class="cero-row"><div class="cero-avatar" aria-hidden="true">0</div><p class="bubble"><strong>${esc(l.name)}:</strong> ${esc(l.intro)}</p></div>
+    ${ceroSays(state.attempt > 0 ? "pensando" : "curioso", `<strong>${esc(l.name)}:</strong> ${esc(l.intro)}`)}
     <h1 id="h-teach">Enséñale: ${esc(t.title)}</h1>
     <p class="lead">${esc(t.starter)}</p>
     ${hl}
     <label for="explanation" class="label">Tu explicación</label>
-    <textarea id="explanation" data-testid="explanation" rows="9" placeholder="${esc(t.hint)}" aria-describedby="teach-help">${esc(state.text)}</textarea>
-    <p id="teach-help" class="note"><span id="wordcount">0</span> palabras · mínimo recomendado: 25. Cero solo usará lo que escribas aquí.</p>
+    <textarea id="explanation" class="notebook" data-testid="explanation" rows="9" placeholder="${esc(t.hint)}" aria-describedby="teach-help">${esc(state.text)}</textarea>
+    <p id="teach-help" class="note"><span id="wordcount">0</span> palabras. Mínimo recomendado: 25. Cero solo usará lo que escribas aquí.</p>
     ${flashHtml()}
     <div class="cta-row">
       <button class="btn btn-primary btn-lg" data-action="teach-submit" data-testid="teach-submit">Enseñar a Cero</button>
-      ${speech.supported ? `<button class="btn btn-secondary" data-action="dictate" aria-pressed="${speech.active}" data-testid="dictate">${speech.active ? "■ Detener dictado" : "🎤 Dictar"}</button>` : ""}
-      <button class="btn btn-ghost" data-action="demo-text" data-testid="demo-text" title="Rellena un ejemplo con un malentendido típico para probar la app">Cargar ejemplo de demo</button>
+      ${speech.supported ? `<button class="btn btn-secondary" data-action="dictate" aria-pressed="${speech.active}" data-testid="dictate">${speech.active ? `<span class="rec-dot" aria-hidden="true"></span> Detener dictado` : "Dictar por voz"}</button>` : ""}
     </div>
-    ${state.attempt > 0 ? `<button class="btn btn-ghost" data-action="model-text">Ver una explicación de referencia</button>` : ""}
+    <div class="aux-row">
+      <button class="btn btn-ghost" data-action="demo-text" data-testid="demo-text" title="Rellena un ejemplo con un malentendido típico para probar la app">Cargar ejemplo de demo</button>
+      ${state.attempt > 0 ? `<button class="btn btn-ghost" data-action="model-text">Ver una explicación de referencia</button>` : ""}
+    </div>
   </section>`;
 }
 
 function viewReading() {
   const a = state.analysis;
   return `
-  <section aria-labelledby="h-read" aria-live="polite">
+  <section class="reading" aria-labelledby="h-read" aria-live="polite">
+    ${cero("pensando", "cero-lg cero-think")}
     <h1 id="h-read">Cero está leyendo tu explicación…</h1>
     <p class="lead" data-testid="processing">Analizando en tu dispositivo: ${a.log.sentences} frases, ${a.log.matched} ideas clave reconocidas. No se envía nada a internet.</p>
-    <div class="spinner" aria-hidden="true"></div>
+    <div class="spinner" aria-hidden="true"><span></span><span></span><span></span></div>
   </section>`;
 }
 
@@ -242,16 +281,16 @@ function viewReflect() {
   const qs = questionsFor(t, a, state.level);
   return `
   <section aria-labelledby="h-reflect">
-    <div class="cero-row"><div class="cero-avatar" aria-hidden="true">0</div><h1 id="h-reflect">Esto es lo que entendí</h1></div>
+    <div class="cero-row cero-row-title">${cero(qs.length ? "curioso" : "feliz")}<h1 id="h-reflect">Esto es lo que entendí</h1></div>
     <ul class="understood" data-testid="understood">
       ${refl.map((r) => `
-      <li class="card ${r.state}">
+      <li class="card note-card ${r.state}">
         ${r.state === "missing" ? `<p><span class="badge badge-gap">No me lo dijiste</span> ${esc(t.concepts.find((c) => c.id === r.conceptId).label)}</p>` : `
         <p><span class="badge ${r.state === "known" ? "badge-ok" : "badge-warn"}">${r.state === "known" ? "Entendido" : "Entendí esto"}</span> ${esc(r.understood)}</p>
         <blockquote>«${esc(r.quote)}»</blockquote>`}
       </li>`).join("")}
     </ul>
-    ${qs.length ? `<div class="card questions" data-testid="questions"><p class="eyebrow">Mis dudas</p><ul>${qs.map((q) => `<li>${esc(q.text)}</li>`).join("")}</ul></div>` : `<p class="note">No tengo dudas. Creo que puedo intentarlo.</p>`}
+    ${qs.length ? `<div class="questions" data-testid="questions"><h2 class="plan-title">Mis dudas</h2><ul>${qs.map((q) => `<li>${esc(q.text)}</li>`).join("")}</ul></div>` : `<p class="note">No tengo dudas. Creo que puedo intentarlo.</p>`}
     <div class="cta-row">
       <button class="btn btn-primary btn-lg" data-action="take-exam" data-testid="take-exam">Dejar que Cero haga el examen</button>
       <button class="btn btn-secondary" data-action="edit-text">Añadir o corregir mi explicación</button>
@@ -265,28 +304,27 @@ function viewExam() {
   const v = t.variants.find((x) => x.id === e.variantId);
   return `
   <section aria-labelledby="h-exam">
-    <p class="eyebrow">Examen de transferencia · Caso nuevo</p>
-    <h1 id="h-exam">Problema</h1>
-    <div class="card case"><p>${esc(v.context)}</p><p><strong>${esc(v.question)}</strong></p></div>
+    <div class="cero-row cero-row-title">${cero("pensando")}<div><p class="kicker">Examen de transferencia: un caso que Cero nunca vio</p><h1 id="h-exam">Problema</h1></div></div>
+    <div class="exam-paper"><p>${esc(v.context)}</p><p class="exam-q"><strong>${esc(v.question)}</strong></p></div>
     <h2>Así razona Cero (solo con lo que le enseñaste)</h2>
     <ol class="steps" data-testid="steps">
       ${e.steps.map((s) => `<li class="${s.ok ? "ok" : "bad"}"><span class="badge ${s.ok ? "badge-ok" : "badge-warn"}">${s.ok ? "Tú me lo enseñaste" : s.source === "user-wrong" ? "Eso me dijiste" : "Me faltó información"}</span> ${esc(s.text)}</li>`).join("")}
     </ol>
-    ${e.rows.length ? `<table class="calc" data-testid="calc"><caption class="sr-only">Cálculo de Cero</caption><thead><tr><th scope="col">Paso</th><th scope="col">Cálculo</th><th scope="col">Resultado</th></tr></thead><tbody>${e.rows.map((r) => `<tr><th scope="row">${esc(r.label)}</th><td>${esc(r.detail)}</td><td>${esc(r.total)}</td></tr>`).join("")}</tbody></table>` : ""}
-    <div class="card answer" data-testid="cero-answer"><p class="eyebrow">Respuesta de Cero</p><p class="big">${esc(e.answerText)}</p></div>
-    <button class="btn btn-primary btn-lg" data-action="see-result" data-testid="see-result">Ver si acertó</button>
+    ${e.rows.length ? `<div class="table-wrap" role="region" aria-label="Cálculo de Cero" tabindex="0"><table class="calc" data-testid="calc"><caption class="sr-only">Cálculo de Cero</caption><thead><tr><th scope="col">Paso</th><th scope="col">Cálculo</th><th scope="col">Resultado</th></tr></thead><tbody>${e.rows.map((r) => `<tr><th scope="row">${esc(r.label)}</th><td>${esc(r.detail)}</td><td>${esc(r.total)}</td></tr>`).join("")}</tbody></table></div>` : ""}
+    <div class="answer" data-testid="cero-answer"><p class="answer-label">Respuesta de Cero</p><p class="big">${esc(e.answerText)}</p></div>
+    <div class="cta-row"><button class="btn btn-primary btn-lg" data-action="see-result" data-testid="see-result">Ver si acertó</button></div>
   </section>`;
 }
 
 function viewResult() {
   const t = topic();
   const e = state.exam;
-  const v = t.variants.find((x) => x.id === e.variantId);
   if (e.passed) {
     return `
-    <section aria-labelledby="h-res" data-testid="result-pass">
-      <h1 id="h-res">¡Aprobé! 🎉</h1>
-      <p class="lead">Cero resolvió un caso <strong>nuevo</strong> usando solo tu explicación. Respuesta correcta: <strong>${esc(e.expectedText)}</strong>.</p>
+    <section class="verdict verdict-pass" aria-labelledby="h-res" data-testid="result-pass">
+      <div class="verdict-head">${cero("feliz", "cero-xl cero-hop")}<p class="stamp stamp-ok" aria-hidden="true">Aprobado</p></div>
+      <h1 id="h-res" class="display">¡Aprobé! 🎉</h1>
+      <p class="lead">Cero resolvió un caso <strong>nuevo</strong> usando solo tu explicación. Respuesta correcta: <strong class="nowrap">${esc(e.expectedText)}</strong>.</p>
       <div class="cta-row">
         <button class="btn btn-primary btn-lg" data-action="finish" data-testid="finish">Ver mi ficha de dominio</button>
       </div>
@@ -295,12 +333,17 @@ function viewResult() {
   const b = e.blame;
   const spanish = b.state === "wrong";
   return `
-  <section aria-labelledby="h-res" data-testid="result-fail">
-    <p class="eyebrow">Reprobé… y tiene arreglo</p>
-    <h1 id="h-res">Reprobé por esto que me enseñaste.</h1>
-    <p>Respondí <strong>${esc(e.answerText)}</strong>, pero lo correcto era <strong>${esc(e.expectedText)}</strong>.</p>
-    ${spanish && b.sentence ? `<blockquote class="blame" data-testid="blame">«<mark>${esc(b.sentence)}</mark>»</blockquote>` : `<div class="blame blame-gap" data-testid="blame"><p><strong>Hueco detectado:</strong> ${esc(b.conceptLabel)}</p></div>`}
-    <p>${esc(b.message)}</p>
+  <section class="verdict verdict-fail" aria-labelledby="h-res" data-testid="result-fail">
+    <div class="verdict-head">${cero("confundido", "cero-xl cero-shake")}<p class="kicker">Me equivoqué… y tiene arreglo</p></div>
+    <h1 id="h-res" class="display">Reprobé por esto que me enseñaste.</h1>
+    <div class="answers">
+      <p class="ans ans-bad"><span class="ans-label">Respondí</span> <s>${esc(e.answerText)}</s></p>
+      <p class="ans ans-good"><span class="ans-label">Lo correcto era</span> <strong>${esc(e.expectedText)}</strong></p>
+    </div>
+    ${spanish && b.sentence
+      ? `<figure class="blame-fig"><figcaption class="pen-note">Tu frase, tal como me la enseñaste:</figcaption><blockquote class="blame" data-testid="blame">«<mark>${esc(b.sentence)}</mark>»</blockquote></figure>`
+      : `<div class="blame blame-gap" data-testid="blame"><p><strong>Hueco detectado:</strong> ${esc(b.conceptLabel)}</p></div>`}
+    <p class="blame-why">${esc(b.message)}</p>
     ${b.alsoFailing.length ? `<p class="note">También me faltó aclarar: ${b.alsoFailing.map((id) => esc(t.concepts.find((c) => c.id === id).label)).join("; ")}.</p>` : ""}
     <div class="cta-row">
       <button class="btn btn-primary btn-lg" data-action="start-practice" data-testid="start-practice">Practicar este punto (2 preguntas)</button>
@@ -318,17 +361,22 @@ function viewPractice() {
   const label = t.concepts.find((c) => c.id === p.conceptId).label;
   const answered = p.answers[p.index] !== undefined;
   const chosen = p.answers[p.index];
+  const letters = "ABCDEFG";
   return `
   <section aria-labelledby="h-prac">
-    <p class="eyebrow">Mini-práctica dirigida · ${esc(label)}</p>
+    <p class="kicker">Mini-práctica dirigida: ${esc(label)}</p>
     <h1 id="h-prac">Pregunta ${p.index + 1} de ${bank.length}</h1>
-    <p class="lead">${esc(q.q)}</p>
+    <p class="lead q-text">${esc(q.q)}</p>
     <ul class="options" data-testid="options">
-      ${q.options.map((o, i) => `
-      <li><button class="btn option ${answered ? (i === q.correct ? "correct" : i === chosen ? "wrong" : "") : ""}" data-action="practice-answer" data-i="${i}" ${answered ? "disabled" : ""}>${esc(o)}</button></li>`).join("")}
+      ${q.options.map((o, i) => {
+        const cls = answered ? (i === q.correct ? "correct" : i === chosen ? "wrong" : "") : "";
+        const mark = answered && i === q.correct ? `<span class="sr-only"> (respuesta correcta)</span>` : answered && i === chosen ? `<span class="sr-only"> (tu respuesta)</span>` : "";
+        return `
+      <li><button class="btn option ${cls}" data-action="practice-answer" data-i="${i}" ${answered ? "disabled" : ""}><span class="opt-letter" aria-hidden="true">${letters[i]}</span><span class="opt-text">${esc(o)}${mark}</span></button></li>`;
+      }).join("")}
     </ul>
-    ${answered ? `<div class="card feedback ${chosen === q.correct ? "ok" : "bad"}" role="status"><p><strong>${chosen === q.correct ? "¡Correcto!" : "No exactamente."}</strong> ${esc(q.why)}</p></div>
-    <button class="btn btn-primary" data-action="practice-next" data-testid="practice-next">${p.index + 1 < bank.length ? "Siguiente" : "Volver a enseñarle a Cero"}</button>` : ""}
+    ${answered ? `<div class="feedback ${chosen === q.correct ? "ok" : "bad"}" role="status"><p><strong>${chosen === q.correct ? "¡Correcto!" : "No exactamente."}</strong> ${esc(q.why)}</p></div>
+    <div class="cta-row"><button class="btn btn-primary btn-lg" data-action="practice-next" data-testid="practice-next">${p.index + 1 < bank.length ? "Siguiente pregunta" : "Volver a enseñarle a Cero"}</button></div>` : ""}
   </section>`;
 }
 
@@ -337,9 +385,12 @@ function viewCard() {
   const m = state.mastered;
   return `
   <section aria-labelledby="h-card">
-    <h1 id="h-card">Tu ficha de dominio</h1>
+    <div class="cero-row cero-row-title">${cero("feliz")}<h1 id="h-card">Tu ficha de dominio</h1></div>
     <article class="mastery" data-testid="mastery-card" id="mastery-card">
-      <p class="eyebrow">${esc(t.emoji)} ${esc(t.title)} · Dominado el ${esc(new Date(m.at).toLocaleDateString("es-PE", { day: "numeric", month: "long", year: "numeric" }))}</p>
+      <header class="mastery-head">
+        <p class="mastery-topic"><span aria-hidden="true">${esc(t.emoji)}</span> ${esc(t.title)}</p>
+        <p class="mastery-date">Dominado el ${esc(new Date(m.at).toLocaleDateString("es-PE", { day: "numeric", month: "long", year: "numeric" }))}</p>
+      </header>
       <h2>Mi explicación (ya corregida)</h2>
       <blockquote class="own">${esc(m.text).replace(/\n/g, "<br />")}</blockquote>
       <h2>Conceptos que Cero usó correctamente</h2>
@@ -347,7 +398,7 @@ function viewCard() {
       <h2>Tu acción para esta semana</h2>
       <p>${esc(t.action)}</p>
       <h2>Referencia</h2>
-      <p><a href="${esc(t.reference.url)}" target="_blank" rel="noopener">${esc(t.reference.label)}</a><br /><small>${esc(t.reference.note)}</small></p>
+      <p><a href="${esc(t.reference.url)}" target="_blank" rel="noopener">${esc(t.reference.label)}<span class="sr-only"> (se abre en otra pestaña)</span></a><br /><small>${esc(t.reference.note)}</small></p>
       <p class="note">Intentos hasta aprobar: ${state.history.length}${state.history.some((h) => !h.passed) ? " (aprender de los errores también cuenta)" : ""}.</p>
     </article>
     <div class="cta-row">
@@ -369,14 +420,38 @@ function render() {
   if (need[state.screen] && !state[need[state.screen]] && !(need[state.screen] === "topicId" && state.topicId)) {
     state.screen = state.topicId ? "teach" : "welcome";
   }
+  const keep = focusKey(document.activeElement);
+  root.dataset.screen = state.screen;
   root.innerHTML = `${header()}<main id="main" tabindex="-1">${state.screen === "welcome" || !flash || state.screen === "teach" || state.screen === "goal" ? "" : flashHtml()}${VIEWS[state.screen]()}</main>${footer()}`;
   const h = root.querySelector("main h1");
   if (h) { h.setAttribute("tabindex", "-1"); }
+  // Move focus to the new screen's heading so keyboard and screen-reader users land on it.
+  if (render.lastScreen && render.lastScreen !== state.screen && h) h.focus({ preventScroll: true });
+  else if (keep && render.lastScreen === state.screen) restoreFocus(keep);
+  render.lastScreen = state.screen;
   if (state.screen === "teach") updateWordCount();
   if (state.screen === "reading") {
     clearTimeout(render.timer);
     render.timer = setTimeout(() => { if (state.screen === "reading") go("reflect"); }, 1400);
   }
+}
+
+// Re-rendering replaces the DOM; keep keyboard focus on the equivalent control.
+function focusKey(el) {
+  if (!el || el === document.body || !root.contains(el)) return null;
+  if (el.name && el.type === "radio") return `input[name="${el.name}"][value="${el.value}"]`;
+  if (el.id) return `#${CSS.escape(el.id)}`;
+  if (el.dataset.action) {
+    let sel = `[data-action="${el.dataset.action}"]`;
+    for (const k of ["id", "val", "i"]) if (el.dataset[k] !== undefined) sel += `[data-${k}="${el.dataset[k]}"]`;
+    return sel;
+  }
+  return null;
+}
+function restoreFocus(sel) {
+  const el = root.querySelector(sel);
+  const target = el && !el.disabled ? el : root.querySelector('[data-testid="practice-next"]') ?? root.querySelector("main h1");
+  target?.focus({ preventScroll: true });
 }
 
 function updateWordCount() {
@@ -414,7 +489,7 @@ const actions = {
   "fr-next"() { go("prefs"); },
   "prefs-next"() { go("teach"); },
   "demo-text"() {
-    state.text = DEMO_BAD[state.topicId];
+    state.text = DEMO_BAD[state.topicId]; flash = null;
     persist(); render();
   },
   "model-text"() {
