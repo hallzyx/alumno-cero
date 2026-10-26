@@ -4,10 +4,12 @@
 // the learner taught, targeted micro-practice, and a model explanation used by
 // the test-suite (and offered as a last resort after repeated failures).
 
-import { formatMoney } from "./engine.js";
+import { formatMoney, formatNum } from "./engine.js";
 import { rule, water } from "./topics-extra.js";
 
 const fmt = formatMoney;
+const n = formatNum;
+const pct = (x) => Math.round(x * 10000) / 100; // 0.1 -> 10
 
 /* -------------------------------------------------------------------------- */
 /* 1. Interés compuesto                                                       */
@@ -33,17 +35,31 @@ function solveCompound(v, st) {
 
   let balance = v.principal;
   const rows = [];
+  // Notebook pages: `{a|b}` is a stacked fraction. `ok:false` lines are the ones built on a wrong/missing idea.
+  const work = [];
   for (let y = 1; y <= yearsApplied; y++) {
     const base = baseKnown ? balance : v.principal;
     const interest = rateKnown ? base * v.rate : v.rate * 100;
+    const before = balance;
     balance += interest;
     rows.push({ label: `Año ${y}`, detail: `interés sobre ${fmt(base)} = ${fmt(interest)}`, total: fmt(balance) });
+    work.push({
+      label: `Año ${y}`,
+      ok: rateKnown && (baseKnown || y === 1), // year 1 uses the initial amount either way
+      exprs: [
+        rateKnown ? `${n(base)} × {${pct(v.rate)}|100} = ${n(interest)}` : `interés fijo = ${n(interest)}`,
+        `${n(before)} + ${n(interest)} = ${n(balance)}`,
+      ],
+    });
   }
+  if (!repeatKnown && v.years > 1) work.push({ label: "Me detuve", ok: false, exprs: [`solo 1 año (¿y los otros ${v.years - 1}?)`] });
 
   const answer = Math.round(balance * 100) / 100;
+  work.push({ label: "Respuesta", final: true, ok: true, exprs: [`= ${n(answer)}`] });
   return {
     steps,
     rows,
+    work,
     answer,
     expected: v.expected,
     passed: Math.abs(answer - v.expected) < 0.5,
@@ -182,24 +198,30 @@ function solveDiscounts(v, st) {
   ];
 
   const rows = [];
+  const work = [];
   let price = v.price;
   if (pctKnown) {
     if (secondKnown) {
       const p1 = v.price * (1 - d1);
       rows.push({ label: "1.er descuento", detail: `${fmt(v.price)} − ${d1 * 100}%`, total: fmt(p1) });
+      work.push({ label: "1.er descuento", ok: true, exprs: [`{${pct(d1)}|100} × ${n(v.price)} = ${n(v.price * d1)}`, `${n(v.price)} − ${n(v.price * d1)} = ${n(p1)}`] });
       price = p1 * (1 - d2);
       rows.push({ label: "2.º descuento", detail: `${fmt(p1)} − ${d2 * 100}%`, total: fmt(price) });
+      work.push({ label: "2.º descuento", ok: true, exprs: [`{${pct(d2)}|100} × ${n(p1)} = ${n(p1 * d2)}`, `${n(p1)} − ${n(p1 * d2)} = ${n(price)}`] });
     } else {
       price = v.price * (1 - (d1 + d2));
       rows.push({ label: "Descuento total", detail: `${fmt(v.price)} − ${(d1 + d2) * 100}%`, total: fmt(price) });
+      work.push({ label: "Sumo los porcentajes", ok: false, exprs: [`${pct(d1)}% + ${pct(d2)}% = ${pct(d1 + d2)}%`, `{${pct(d1 + d2)}|100} × ${n(v.price)} = ${n(v.price * (d1 + d2))}`, `${n(v.price)} − ${n(v.price * (d1 + d2))} = ${n(price)}`] });
     }
   } else {
     price = v.price - d1 * 100 - (secondKnown ? 0 : d2 * 100);
     rows.push({ label: "Descuento", detail: `${fmt(v.price)} − S/ ${(d1 + (secondKnown ? 0 : d2)) * 100}`, total: fmt(price) });
+    work.push({ label: "Resto soles", ok: false, exprs: [`${n(v.price)} − ${pct(d1)}${secondKnown ? "" : ` − ${pct(d2)}`} = ${n(price)}`] });
   }
 
   const answer = Math.round(price * 100) / 100;
-  return { steps, rows, answer, expected: v.expected, passed: Math.abs(answer - v.expected) < 0.5, answerText: fmt(answer), expectedText: fmt(v.expected) };
+  work.push({ label: "Respuesta", final: true, ok: true, exprs: [`= ${n(answer)}`] });
+  return { steps, rows, work, answer, expected: v.expected, passed: Math.abs(answer - v.expected) < 0.5, answerText: fmt(answer), expectedText: fmt(v.expected) };
 }
 
 const discounts = {

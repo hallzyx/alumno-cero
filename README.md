@@ -61,6 +61,7 @@ Bienvenida con resultado a la vista → objetivo (tema + para qué) → friccion
 - **Materias y experiencia distinta:** *Matemática* (procedimiento paso a paso, simuladores interactivos) y *Ciencias* (causas y porqués, diagramas que se tocan). Cada tema trae su «mochila»: glosario, ejemplo resuelto, truco y simulador/diagrama. 5 temas: interés compuesto, descuentos sucesivos, regla de tres, fotosíntesis y ciclo del agua.
 
 - **Rutas con URL:** `/` (inicio), `/cuenta`, `/hub`, `/temas` y `/aprender/<tema>/<paso>` (`dificultades`, `ajustes`, `ensenar`, `cero-responde`, `examen`, `resultado`, `practica`, `ficha`). Funcionan los botones atrás/adelante y recargar o compartir un enlace directo. Si eliges un tema desde el hub no se vuelve a mostrar la lista de temas.
+- **Cuaderno de matemática:** en los temas de mate, Cero escribe sus operaciones a mano (fracciones apiladas, líneas de cuaderno). Si falla, las líneas erróneas se marcan en rojo y al lado aparece la versión correcta. Las operaciones las genera el solver de cada tema (aritmética exacta, sin alucinaciones).
 - **Escritorio:** hub y «Enséñale» pasan a dos columnas en pantallas anchas.
 
 ## Datos y privacidad

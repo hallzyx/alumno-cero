@@ -157,6 +157,20 @@ export function buildBlame(topic, analysis, conceptId, result) {
   };
 }
 
+/** Plain number for the notebook ("1,331", "2431.01" -> "2,431.01"). */
+export function formatNum(n) {
+  return n.toLocaleString("es-PE", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+}
+
+/**
+ * The notebook page a faithful Cero would write if the learner had taught everything right.
+ * Used to show the correction next to Cero's (possibly wrong) work. Topics without `work` return null.
+ */
+export function correctWork(topic, variant) {
+  const states = Object.fromEntries(topic.concepts.map((c) => [c.id, "known"]));
+  return topic.solve(variant, states).work ?? null;
+}
+
 export function formatMoney(n) {
   return `S/ ${n.toLocaleString("es-PE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }

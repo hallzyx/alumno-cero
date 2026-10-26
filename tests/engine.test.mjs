@@ -87,3 +87,18 @@ test("every topic declares a subject and has resources", async () => {
     assert.ok(RESOURCES[t.id]?.glossary.length, t.id);
   }
 });
+
+test("math topics write notebook work; the corrected page ends in the expected answer", async () => {
+  const { correctWork } = await import("../src/lib/engine.js");
+  for (const id of ["interes-compuesto", "descuentos-sucesivos", "regla-de-tres"]) {
+    const t = getTopic(id);
+    const v = t.variants[0];
+    const good = correctWork(t, v);
+    assert.ok(good.length >= 2, id);
+    assert.ok(good.every((l) => l.ok), id);
+    assert.equal(good.at(-1).exprs[0].replace(/[^\d.]/g, ""), String(v.expected).replace(/[^\d.]/g, ""), id);
+    const bad = takeExam(t, v, analyze(t, "x")); // nothing taught: Cero guesses
+    assert.ok(bad.work.some((l) => l.ok === false), id);
+  }
+  assert.equal(correctWork(getTopic("fotosintesis"), getTopic("fotosintesis").variants[0]), null);
+});

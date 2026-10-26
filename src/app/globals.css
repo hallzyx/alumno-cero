@@ -887,3 +887,30 @@ blockquote.blame { margin: 0; font-size: clamp(1.25rem, 1.05rem + 1vw, 1.6rem); 
   .mic-hero.is-recording .mic-big { animation: mic-pulse 1.3s ease-out infinite; }
 }
 @keyframes mic-pulse { 0% { box-shadow: var(--pop), 0 0 0 0 rgba(196, 43, 43, .5); } 100% { box-shadow: var(--pop), 0 0 0 22px rgba(196, 43, 43, 0); } }
+
+/* ===== Cuaderno de Cero: matemática escrita a mano ===== */
+.cuaderno { margin: 16px 0 0; border: var(--bw) solid var(--ink); border-radius: var(--r-md); background: #fffef7; box-shadow: var(--pop-sm); overflow: hidden; }
+.cuaderno-title { padding: 8px 14px; border-bottom: 2px solid var(--ink); background: var(--note-sky); font-family: var(--font-display); font-weight: 700; font-size: 1rem; }
+.cuaderno-fix .cuaderno-title { background: var(--green-soft); color: var(--green); }
+.cn-lines { list-style: none; margin: 0; padding: 0; position: relative;
+  background: repeating-linear-gradient(to bottom, transparent 0, transparent 53px, var(--rule) 53px, var(--rule) 55px);
+  background-position: 0 6px; }
+.cn-lines::before { content: ""; position: absolute; top: 0; bottom: 0; left: 44px; width: 2px; background: var(--margin); opacity: .8; }
+.cn-line { position: relative; display: grid; grid-template-columns: 1fr; gap: 0 12px; align-items: center; min-height: 56px; padding: 8px 48px 8px 58px; }
+.cn-label { font-family: var(--font-body); font-size: .8rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; }
+.cn-exprs { display: flex; flex-direction: column; gap: 2px; }
+.math { font-family: var(--font-pen); font-weight: 600; font-size: 1.7rem; line-height: 1.25; color: #1d3a96; display: inline-flex; align-items: center; flex-wrap: wrap; white-space: pre-wrap; }
+.frac { display: inline-flex; flex-direction: column; align-items: center; vertical-align: middle; margin: 0 .2em; line-height: 1.05; font-size: .85em; }
+.frac .num { padding: 0 .3em; border-bottom: 2px solid currentColor; }
+.frac .den { padding: 0 .3em; }
+.cn-line.final .math { font-size: 2rem; }
+.cn-line.final .math > span:first-child { padding: 0 8px; border: 2.5px solid currentColor; border-radius: 50% / 40%; }
+.cn-line.bad { background: rgba(255, 179, 196, .35); }
+.cn-line.bad .math { color: var(--red); }
+.cn-line.bad::after { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 5px; background: var(--red); }
+.cn-mark { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; border: 2.5px solid currentColor; background: #fff; }
+.cn-x { color: var(--red); } .cn-ok { color: var(--green); }
+.cuaderno-fix .math { color: var(--green); }
+.cn-pair { display: grid; gap: 16px; margin: 8px 0 4px; }
+@media (min-width: 900px) { .cn-pair { grid-template-columns: 1fr 1fr; align-items: start; } }
+@media (max-width: 480px) { .math { font-size: 1.45rem; } .cn-line { padding-left: 52px; padding-right: 44px; } .cn-lines::before { left: 38px; } }

@@ -1,8 +1,9 @@
 // Alumno Cero — extra curated topics (one math, one theory). Same shape as topics.js.
 // Patterns are written against normalized text (lowercase, no accents) for the local fallback engine.
-import { formatMoney } from "./engine.js";
+import { formatMoney, formatNum } from "./engine.js";
 
 const fmt = formatMoney;
+const n = formatNum;
 
 /* -------------------------------------------------------------------------- */
 /* Regla de tres (matemática)                                                 */
@@ -29,23 +30,31 @@ function solveRule(v, st) {
   ];
 
   const rows = [];
+  const work = []; // notebook lines; `{a|b}` is a stacked fraction
   let answer;
   if (!ratio) {
     answer = total + diff;
     rows.push({ label: "Suma de la diferencia", detail: `${fmt(total)} + ${diff}`, total: fmt(answer) });
+    work.push({ label: "Sumo la diferencia", ok: false, exprs: [`${q2} − ${q1} = ${diff}`, `${n(total)} + ${diff} = ${n(answer)}`] });
   } else if (!unit) {
     answer = total * q2;
     rows.push({ label: "Multiplico todo", detail: `${fmt(total)} × ${q2}`, total: fmt(answer) });
+    work.push({ label: "Multiplico todo", ok: false, exprs: [`${n(total)} × ${q2} = ${n(answer)}`] });
   } else if (!scale) {
     answer = unitVal;
     rows.push({ label: "Valor de 1", detail: `${fmt(total)} ÷ ${q1}`, total: fmt(answer) });
+    work.push({ label: "Valor de 1", ok: true, exprs: [`{${n(total)}|${q1}} = ${n(unitVal)}`] });
+    work.push({ label: "Me quedo aquí", ok: false, exprs: [`respuesta = ${n(unitVal)}`] });
   } else {
     answer = unitVal * q2;
     rows.push({ label: "Valor de 1", detail: `${fmt(total)} ÷ ${q1}`, total: fmt(unitVal) });
     rows.push({ label: `Valor de ${q2}`, detail: `${fmt(unitVal)} × ${q2}`, total: fmt(answer) });
+    work.push({ label: "Valor de 1", ok: true, exprs: [`{${n(total)}|${q1}} = ${n(unitVal)}`] });
+    work.push({ label: `Valor de ${q2}`, ok: true, exprs: [`${n(unitVal)} × ${q2} = ${n(answer)}`] });
   }
   answer = Math.round(answer * 100) / 100;
-  return { steps, rows, answer, expected: v.expected, passed: Math.abs(answer - v.expected) < 0.5, answerText: fmt(answer), expectedText: fmt(v.expected) };
+  work.push({ label: "Respuesta", final: true, ok: true, exprs: [`= ${n(answer)}`] });
+  return { steps, rows, work, answer, expected: v.expected, passed: Math.abs(answer - v.expected) < 0.5, answerText: fmt(answer), expectedText: fmt(v.expected) };
 }
 
 export const rule = {

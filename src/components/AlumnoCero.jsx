@@ -13,7 +13,8 @@ import Hub from "./Hub";
 import Auth from "./Auth";
 import Avatar from "./Avatar";
 import RewardToast from "./RewardToast";
-import { analyze, knownConcepts, pickVariant, questionsFor, reflect, takeExam, validateExplanation } from "@/lib/engine";
+import { analyze, correctWork, knownConcepts, pickVariant, questionsFor, reflect, takeExam, validateExplanation } from "@/lib/engine";
+import Cuaderno from "./Cuaderno";
 import { clear, initialState, load, save } from "@/lib/store";
 import { startRecording } from "@/lib/audio";
 import { Cero, CeroSays } from "./Cero";
@@ -728,7 +729,8 @@ export default function AlumnoCero() {
               <li key={i} className={s.ok ? "ok" : "bad"}><span className={`badge ${s.ok ? "badge-ok" : "badge-warn"}`}><I as={s.ok ? Check : TriangleAlert} size={16} /> {s.ok ? "Tú me lo enseñaste" : s.source === "user-wrong" ? "Eso me dijiste" : "Me faltó información"}</span> {s.text}</li>
             ))}
           </ol>
-          {e.rows.length > 0 && (
+          {e.work?.length > 0 && <Cuaderno work={e.work} title="El cuaderno de Cero" testid="notebook" />}
+          {!e.work && e.rows.length > 0 && (
             <div className="table-wrap" role="region" aria-label="Cálculo de Cero" tabIndex={0}>
               <table className="calc" data-testid="calc">
                 <caption className="sr-only">Cálculo de Cero</caption>
@@ -769,6 +771,12 @@ export default function AlumnoCero() {
             ? <figure className="blame-fig"><figcaption className="pen-note">Esta es tu frase:</figcaption><blockquote className="blame" data-testid="blame">«<mark>{b.sentence}</mark>»</blockquote></figure>
             : <div className="blame blame-gap" data-testid="blame"><p><strong>Te faltó explicarme:</strong> {b.conceptLabel}</p></div>}
           <p className="blame-why"><I as={Lightbulb} size={22} /> <span>{b.message}</span></p>
+          {e.work?.length > 0 && (
+            <div className="cn-pair" data-testid="notebooks">
+              <Cuaderno work={e.work} title="Lo que escribió Cero" marks testid="notebook-cero" />
+              {correctWork(topic, topic.variants.find((x) => x.id === e.variantId)) && <Cuaderno work={correctWork(topic, topic.variants.find((x) => x.id === e.variantId))} title="Así se hace bien" tone="fix" testid="notebook-fix" />}
+            </div>
+          )}
           {b.alsoFailing.length > 0 && <p className="note">También me faltó entender: {b.alsoFailing.map((id) => topic.concepts.find((c) => c.id === id).label).join("; ")}.</p>}
           <div className="cta-row">
             <Btn cls="btn-primary btn-lg" onClick={actions.startPractice} testid="start-practice"><I as={Dumbbell} /> Practicar esto (2 preguntas)</Btn>
