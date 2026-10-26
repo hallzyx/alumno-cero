@@ -41,6 +41,14 @@ Cero **no es un LLM**. Es un motor determinista (`src/engine.js`) que detecta, m
 
 Bienvenida con resultado a la vista → objetivo (tema + para qué) → fricciones (tarjetas con botones Sí/No, alternativa accesible al swipe) → preferencias que **cambian** cómo pregunta Cero y qué examen toca → enseñanza real (interacción desde el primer minuto) → procesamiento real y local → primer valor (ficha). Omitimos a propósito: prueba social (no inventamos testimonios), tabla comparativa, registro y paywall (el producto es gratuito y sin cuenta).
 
+## Recorrido de demostración para el jurado (≈ 3 min)
+
+1. Abre el MVP → **Empezar** → elige *Interés compuesto* y un objetivo → marca fricciones → elige **Cero escéptico** (cambia cómo pregunta).
+2. En «Enseñar» pulsa **Cargar ejemplo de demo** (texto de ejemplo con un malentendido típico) → **Enseñar a Cero**.
+3. Revisa lo que Cero entendió → **Dejar que Cero haga el examen** → **Ver si acertó**: aparece la frase tuya resaltada que causó el error.
+4. **Practicar este punto** → corrige tu explicación («el interés se calcula sobre el saldo acumulado, con los intereses ya ganados») → examen aprobado → **ficha de dominio**.
+5. Casos límite: texto vacío, muy corto o de otro tema muestran un mensaje y permiten continuar; recargar la página conserva el progreso.
+
 ## Datos y privacidad
 
 Todo el progreso se guarda en `localStorage` de tu navegador (clave `alumno-cero:v1`); «Empezar de nuevo» lo borra. No hay cuentas, servidor ni analítica.
