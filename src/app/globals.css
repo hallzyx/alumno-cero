@@ -869,3 +869,21 @@ blockquote.blame { margin: 0; font-size: clamp(1.25rem, 1.05rem + 1vw, 1.6rem); 
 @media (min-width: 1400px) {
   #app[data-screen="hub"], #app[data-screen="goal"], #app[data-screen="teach"] { max-width: 1280px; }
 }
+
+/* modo de enseñanza: escribir vs hablar */
+.mode-seg { margin: 6px 0 14px; max-width: 460px; }
+.mode-seg .btn { box-shadow: none; }
+.mode-seg .btn-primary { box-shadow: var(--pop-sm); }
+.mic-hero { display: grid; justify-items: center; gap: 8px; text-align: center; padding: 22px 16px; margin: 4px 0 12px; border: 2.5px dashed var(--line-strong); border-radius: var(--r-lg); background: var(--note-sky); }
+.mic-big { display: grid; place-items: center; width: 108px; height: 108px; border: var(--bw) solid var(--ink); border-radius: 50%; background: var(--pencil); color: var(--ink); box-shadow: var(--pop); cursor: pointer; transition: transform .15s var(--ease); }
+.mic-big:hover:not(:disabled) { transform: translateY(-2px); }
+.mic-big:focus-visible { outline: 3px solid var(--focus); outline-offset: 4px; }
+.mic-big:disabled { cursor: progress; opacity: .8; }
+.mic-hero.is-recording { background: var(--red-soft); border-color: var(--red); border-style: solid; }
+.mic-hero.is-recording .mic-big { background: var(--red); border-color: var(--ink); color: #fff; }
+.mic-status { margin: 0; font-family: var(--font-display); font-weight: 600; font-size: 1.2rem; }
+.mic-tip { margin: 0; color: var(--muted); font-size: .95rem; }
+@media (prefers-reduced-motion: no-preference) {
+  .mic-hero.is-recording .mic-big { animation: mic-pulse 1.3s ease-out infinite; }
+}
+@keyframes mic-pulse { 0% { box-shadow: var(--pop), 0 0 0 0 rgba(196, 43, 43, .5); } 100% { box-shadow: var(--pop), 0 0 0 22px rgba(196, 43, 43, 0); } }

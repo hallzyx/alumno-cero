@@ -605,6 +605,7 @@ export default function AlumnoCero() {
         : last && !last.passed && blame ? blame.message : null;
       const words = wordsIn(state.text);
       const pct = Math.min(100, Math.round((words / MIN_WORDS) * 100));
+      const voiceMode = state.inputMode === "voice" && voiceOk;
       return (
         <section aria-labelledby="h-teach">
           <CeroSays mood={state.attempt > 0 ? "pensando" : "curioso"}><strong>{level.name}:</strong> {level.intro}</CeroSays>
@@ -617,25 +618,32 @@ export default function AlumnoCero() {
           </div>
           <div className="teach-main">
           {callout && <div className="callout" data-testid="retry-callout"><span className="callout-ico"><I as={Highlighter} /></span><p><strong>Para corregir:</strong> {callout}</p></div>}
-          <label htmlFor="explanation" className="label"><I as={PencilLine} size={20} /> Tu explicación</label>
-          <div className="starters" role="group" aria-label="Para empezar a escribir">
-            {subject.teach.starters.map((st) => <button key={st.label} type="button" className="starter" onClick={() => insertText(st.text)}>{st.label}</button>)}
+          <div className="seg mode-seg" role="group" aria-label="¿Cómo le vas a enseñar?">
+            <button type="button" className={`btn ${!voiceMode ? "btn-primary" : "btn-secondary"}`} aria-pressed={!voiceMode} onClick={() => set({ inputMode: "text" })} data-testid="mode-text"><I as={Keyboard} size={20} /> Escribiendo</button>
+            <button type="button" className={`btn ${voiceMode ? "btn-primary" : "btn-secondary"}`} aria-pressed={voiceMode} disabled={!voiceOk} onClick={() => set({ inputMode: "voice" })} data-testid="mode-voice" title={voiceOk ? "" : "Tu navegador no permite dictar"}><I as={Mic} size={20} /> Hablando</button>
           </div>
-          <textarea id="explanation" className="notebook" data-testid="explanation" rows={9} placeholder={topic.hint} aria-describedby="teach-help" value={state.text} onChange={(e) => set({ text: e.target.value })} />
+          {voiceMode ? (
+            <div className={`mic-hero ${dict === "recording" ? "is-recording" : ""}`} data-testid="mic-hero">
+              <button type="button" className="mic-big" onClick={dictate} aria-pressed={dict === "recording"} disabled={dict === "transcribing"} data-testid="dictate" aria-label={dict === "recording" ? "Parar de grabar" : "Empezar a hablar"}>
+                {dict === "recording" ? <I as={Square} size={40} /> : dict === "transcribing" ? <span className="spin"><I as={LoaderCircle} size={40} /></span> : <I as={Mic} size={44} />}
+              </button>
+              <p className="mic-status" aria-live="polite">
+                {dict === "recording" ? "Te estoy escuchando… toca otra vez para parar" : dict === "transcribing" ? "Pasando tu voz a texto…" : state.text ? "Toca el micrófono para seguir hablando" : "Toca el micrófono y explícale a Cero"}
+              </p>
+              <p className="mic-tip">Para empezar puedes decir: {subject.teach.starters.slice(0, 2).map((st) => `«${st.label}»`).join(" o ")}</p>
+            </div>
+          ) : (
+            <div className="starters" role="group" aria-label="Para empezar a escribir">
+              {subject.teach.starters.map((st) => <button key={st.label} type="button" className="starter" onClick={() => insertText(st.text)}>{st.label}</button>)}
+            </div>
+          )}
+          <label htmlFor="explanation" className="label"><I as={PencilLine} size={20} /> {voiceMode ? "Lo que dijiste (puedes corregirlo)" : "Tu explicación"}</label>
+          <textarea id="explanation" className="notebook" data-testid="explanation" rows={voiceMode ? 5 : 9} placeholder={voiceMode ? "Aquí aparecerá lo que digas…" : topic.hint} aria-describedby="teach-help" value={state.text} onChange={(e) => set({ text: e.target.value })} />
           <div className={`wordmeter ${words >= MIN_WORDS ? "is-full" : ""}`} aria-hidden="true"><span style={{ width: `${pct}%` }} /></div>
-          <p id="teach-help" className="note"><strong><span id="wordcount">{words}</span> palabras</strong> · Intenta llegar a {MIN_WORDS}. Cero solo usará lo que escribas aquí.</p>
+          <p id="teach-help" className="note"><strong><span id="wordcount">{words}</span> palabras</strong> · Intenta llegar a {MIN_WORDS}. Cero solo usará lo que {voiceMode ? "digas" : "escribas"} aquí.</p>
           {flashEl}
           <div className="cta-row">
             <Btn cls="btn-primary btn-lg" onClick={actions.teachSubmit} testid="teach-submit">Enseñárselo a Cero <I as={ArrowRight} /></Btn>
-            {voiceOk && (
-              <button className={`btn btn-secondary btn-mic ${dict === "recording" ? "is-recording" : ""}`} onClick={dictate} aria-pressed={dict === "recording"} disabled={dict === "transcribing"} data-testid="dictate">
-                {dict === "recording"
-                  ? <><span className="rec-dot" aria-hidden="true" /><I as={Square} size={18} /> Parar dictado</>
-                  : dict === "transcribing"
-                    ? <><span className="spin"><I as={LoaderCircle} /></span> Pasando a texto…</>
-                    : <><I as={Mic} /> Dictar por voz</>}
-              </button>
-            )}
           </div>
           <div className="aux-row">
             <Btn cls="btn-ghost" onClick={actions.demoText} testid="demo-text" title="Rellena una explicación con un error típico para ver cómo falla Cero"><I as={Lightbulb} size={20} /> Rellenar con una idea incorrecta</Btn>
