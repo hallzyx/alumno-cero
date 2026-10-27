@@ -1,10 +1,13 @@
 import { chat, config, OpenRouterError } from "@/lib/openrouter";
+import { requireCloudAI } from "@/lib/learner";
 
 export const dynamic = "force-dynamic";
 const MAX_BYTES = 8 * 1024 * 1024;
 
 // POST multipart/form-data { audio: WAV file } -> { text }
 export async function POST(req) {
+  const gate = await requireCloudAI();
+  if (gate.error) return gate.error;
   try {
     const form = await req.formData();
     const file = form.get("audio");

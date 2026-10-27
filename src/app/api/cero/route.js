@@ -1,4 +1,5 @@
 import { chat, config, OpenRouterError } from "@/lib/openrouter";
+import { requireCloudAI } from "@/lib/learner";
 
 export const dynamic = "force-dynamic";
 
@@ -9,6 +10,8 @@ Nunca corrijas con información externa ni des la respuesta correcta: si la expl
 
 // POST { topic, level, text } -> { text }
 export async function POST(req) {
+  const gate = await requireCloudAI();
+  if (gate.error) return gate.error;
   try {
     const { topic, level, text } = await req.json();
     const explanation = String(text ?? "").slice(0, 4000);

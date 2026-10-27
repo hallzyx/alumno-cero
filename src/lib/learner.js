@@ -3,6 +3,7 @@ import { createHash, randomBytes, scrypt as scryptCb, timingSafeEqual } from "no
 import { promisify } from "node:util";
 import { cookies } from "next/headers";
 import { db } from "./db.js";
+import { isPlan } from "./plans.js";
 
 const scrypt = promisify(scryptCb);
 export const COOKIE = "ac_session";
@@ -42,18 +43,43 @@ export async function endSession() {
   jar.delete(COOKIE);
 }
 
+/**
+ * The profile that is studying right now (a child/student profile if the account switched to one),
+ * plus `account`: the paying owner with the plan. All learning data is keyed by the active profile.
+ */
 export async function currentLearner() {
   const token = (await cookies()).get(COOKIE)?.value;
   if (!token || token.length !== 64) return null;
   const pool = await db();
   const [rows] = await pool.query(
-    `SELECT l.id, l.username, l.nickname, l.avatar, l.grade, l.xp, l.created_at FROM auth_sessions s
-     JOIN learners l ON l.id = s.learner_id WHERE s.token_hash = ? AND s.expires_at > NOW()`,
+    `SELECT l.id, l.username, l.nickname, l.avatar, l.grade, l.xp, l.created_at, l.classroom_id,
+            o.id AS account_id, o.username AS account_username, o.nickname AS account_nickname, o.plan AS account_plan
+     FROM auth_sessions s
+     JOIN learners o ON o.id = s.learner_id
+     JOIN learners l ON l.id = COALESCE(s.active_learner_id, s.learner_id) AND (l.id = o.id OR l.owner_id = o.id)
+     WHERE s.token_hash = ? AND s.expires_at > NOW()`,
     [sha(token)],
   );
-  if (!rows[0]) return null;
-  pool.query("UPDATE learners SET last_seen = NOW() WHERE id = ?", [rows[0].id]).catch(() => {});
-  return rows[0];
+  const r = rows[0];
+  if (!r) return null;
+  pool.query("UPDATE learners SET last_seen = NOW() WHERE id = ?", [r.id]).catch(() => {});
+  const { account_id, account_username, account_nickname, account_plan, ...learner } = r;
+  return { ...learner, account: { id: account_id, username: account_username, nickname: account_nickname, plan: account_plan } };
+}
+
+/** For the paid cloud AI routes: only accounts with a plan may spend the OpenRouter key. */
+export async function requireCloudAI() {
+  let learner = null;
+  try { learner = await currentLearner(); } catch { /* database down: no way to verify the plan */ }
+  if (!learner) return { error: Response.json({ error: "La IA en la nube es parte de los planes. Como invitado, la IA corre en tu navegador.", planRequired: true }, { status: 403 }) };
+  if (!isPlan(learner.account.plan)) return { error: Response.json({ error: "Elige un plan para usar la IA en la nube.", planRequired: true }, { status: 403 }) };
+  return { learner };
+}
+
+export async function setActiveProfile(profileId) {
+  const token = (await cookies()).get(COOKIE)?.value;
+  if (!token) return;
+  await (await db()).query("UPDATE auth_sessions SET active_learner_id = ? WHERE token_hash = ?", [profileId, sha(token)]);
 }
 
 export const dbDown = (e) => (console.error("[api]", e), Response.json({ error: "No pude conectar con la base de datos.", dbOk: false, detail: e?.code ?? null }, { status: 503 }));

@@ -108,7 +108,35 @@ async function init() {
   const pool = mysql.createPool({ ...conn, database, connectionLimit: 6, charset: "utf8mb4", timezone: "Z" });
   pool.pool.on("connection", (c) => c.query("SET time_zone = '+00:00'")); // store everything in UTC
   for (const ddl of SCHEMA) await pool.query(ddl);
+  await migrate(pool, database);
   return pool;
+}
+
+async function hasColumn(pool, database, table, column) {
+  const [r] = await pool.query("SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?", [database, table, column]);
+  return r.length > 0;
+}
+
+// Additive migrations (portable: no "ADD COLUMN IF NOT EXISTS", which MySQL lacks).
+async function migrate(pool, database) {
+  const add = async (table, column, ddl) => {
+    if (!(await hasColumn(pool, database, table, column))) await pool.query(`ALTER TABLE ${table} ADD COLUMN ${column} ${ddl}`);
+  };
+  await add("learners", "plan", "VARCHAR(16) NULL");            // account plan: familia | familia-plus | colegio (null = must choose)
+  await add("learners", "owner_id", "CHAR(36) NULL");           // child/student profiles point to the paying account
+  await add("learners", "classroom_id", "CHAR(36) NULL");
+  await add("auth_sessions", "active_learner_id", "CHAR(36) NULL"); // which profile is studying right now
+  await pool.query(`CREATE TABLE IF NOT EXISTS classrooms (
+    id CHAR(36) PRIMARY KEY,
+    owner_id CHAR(36) NOT NULL,
+    name VARCHAR(60) NOT NULL,
+    grade VARCHAR(16) NULL,
+    code CHAR(6) NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_class_code (code),
+    INDEX idx_class_owner (owner_id),
+    CONSTRAINT fk_class_owner FOREIGN KEY (owner_id) REFERENCES learners(id) ON DELETE CASCADE
+  ) CHARACTER SET utf8mb4`);
 }
 
 /** Shared pool (survives Next.js dev reloads). Rejects if the database is unreachable. */

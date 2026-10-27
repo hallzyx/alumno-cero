@@ -1,12 +1,15 @@
 import { chat, config, OpenRouterError, parseJson } from "@/lib/openrouter";
 import { examMessages, sanitizeAnalysis, validateExam } from "@/lib/ai-grading";
 import { getTopic } from "@/lib/topics";
+import { requireCloudAI } from "@/lib/learner";
 
 export const dynamic = "force-dynamic";
 
 // POST { topicId, variantId, text, analysis } -> { exam } | { error, fallback:true }
 // The model never sees the expected answer; the topic solver verifies what it returns.
 export async function POST(req) {
+  const gate = await requireCloudAI();
+  if (gate.error) return gate.error;
   try {
     const body = await req.json();
     const topic = getTopic(body.topicId);

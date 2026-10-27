@@ -1,12 +1,15 @@
 import { chat, config, OpenRouterError, parseJson } from "@/lib/openrouter";
 import { analysisMessages, validateAnalysis } from "@/lib/ai-grading";
 import { splitSentences } from "@/lib/engine";
+import { requireCloudAI } from "@/lib/learner";
 import { LEVELS, getTopic } from "@/lib/topics";
 
 export const dynamic = "force-dynamic";
 
 // POST { topicId, text } -> { analysis } (same shape as engine.analyze) | { error, fallback:true }
 export async function POST(req) {
+  const gate = await requireCloudAI(); // only accounts with a plan spend the OpenRouter key
+  if (gate.error) return gate.error;
   try {
     const { topicId, text, level } = await req.json();
     const topic = getTopic(topicId);
