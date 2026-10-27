@@ -14,14 +14,7 @@ export class OpenRouterError extends Error {
   }
 }
 
-/** Extract the first JSON object from a model reply (tolerates code fences / chatter). */
-export function parseJson(text) {
-  const raw = String(text ?? "").replace(/```(?:json)?/gi, "");
-  const start = raw.indexOf("{");
-  const end = raw.lastIndexOf("}");
-  if (start < 0 || end <= start) return null;
-  try { return JSON.parse(raw.slice(start, end + 1)); } catch { return null; }
-}
+export { parseJson } from "./json.js";
 
 export async function chat({ model, messages, temperature = 0.4, max_tokens = 600, json = false }) {
   const { key } = config();
