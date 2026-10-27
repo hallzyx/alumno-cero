@@ -5,13 +5,15 @@ import { Calculator, Compass, Dumbbell, Flame, FlaskConical, Library, Lock, Penc
 import { BADGES } from "@/lib/levels";
 import { SUBJECTS } from "@/lib/subjects";
 import { TOPICS, getTopic } from "@/lib/topics";
+import { planOf } from "@/lib/plans";
 import Avatar from "./Avatar";
+import LocalAICard from "./LocalAICard";
 
 const BADGE_ICONS = { Pencil, Trophy, Zap, BookCheck, Library, Dumbbell, Flame, Compass, Star };
 const SUBJECT_ICONS = { Calculator, FlaskConical };
 const fmtDate = (d) => new Date(d).toLocaleDateString("es-PE", { day: "numeric", month: "short" });
 
-export default function Hub({ onContinue, onStartTopic, onExpired, refreshKey }) {
+export default function Hub({ onContinue, onStartTopic, onExpired, refreshKey, account, caps = {}, online = true, onGo }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [retry, setRetry] = useState(0);
@@ -29,6 +31,30 @@ export default function Hub({ onContinue, onStartTopic, onExpired, refreshKey })
       .catch((e) => alive && setError(e.message === "Failed to fetch" ? "Parece que no hay conexión." : e.message));
     return () => { alive = false; };
   }, [refreshKey, retry]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // No connection: the stats come from the server, but practising does not need it.
+  if (error && !online) return (
+    <section data-testid="hub" aria-labelledby="h-hub">
+      <h1 id="h-hub">Mi hub</h1>
+      <p className="note note-box" data-testid="hub-offline">Estás sin conexión, así que no puedo mostrar tu nivel ni tus fichas ahora. <strong>Puedes seguir practicando</strong>: tu avance se guarda en este dispositivo y se sincroniza cuando vuelva internet.</p>
+      <div className="hub-subjects">
+        {Object.values(SUBJECTS).map((sub) => (
+          <article key={sub.id} className={`subject-card subject-${sub.tone}`}>
+            <header><div><h3>{sub.name}</h3><p>{sub.tagline}</p></div></header>
+            <ul>
+              {TOPICS.filter((t) => t.subject === sub.id).map((t) => (
+                <li key={t.id}>
+                  <span className="topic-emoji" aria-hidden="true">{t.emoji}</span>
+                  <span className="topic-name"><strong>{t.title}</strong><small>{t.blurb}</small></span>
+                  <button className="btn btn-sm btn-primary" onClick={() => onStartTopic(t.id)} data-testid={`start-${t.id}`}>Empezar <ArrowRight size={16} strokeWidth={3} aria-hidden="true" className="ico" /></button>
+                </li>
+              ))}
+            </ul>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
 
   if (error) return (
     <section data-testid="hub" aria-labelledby="h-hub">
@@ -59,6 +85,17 @@ export default function Hub({ onContinue, onStartTopic, onExpired, refreshKey })
           <p className="hub-xp">{level.xp} XP · te faltan {level.next - level.xp} para el nivel {level.n + 1}</p>
         </div>
       </div>
+
+      {planOf(account?.plan) && (
+        <div className="plan-strip" data-testid="plan-strip">
+          <p><strong>Plan {planOf(account.plan).name}</strong> · IA en la nube · dictado por voz · progreso sincronizado</p>
+          <div className="plan-strip-actions">
+            {caps.family && <button type="button" className="btn btn-secondary btn-sm" onClick={() => onGo("family")} data-testid="hub-family">Panel familiar</button>}
+            {caps.classrooms && <button type="button" className="btn btn-secondary btn-sm" onClick={() => onGo("classes")} data-testid="hub-classes">Panel docente</button>}
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => onGo("plans")} data-testid="hub-plan">Ver o cambiar mi plan</button>
+          </div>
+        </div>
+      )}
 
       <ul className="hub-stats" aria-label="Tus números">
         <li><Flame aria-hidden="true" /><strong>{stats.streak}</strong><span>días de racha</span></li>
@@ -108,6 +145,8 @@ export default function Hub({ onContinue, onStartTopic, onExpired, refreshKey })
 
       </div>
       <aside className="hub-side">
+      <h2>Estudiar sin internet</h2>
+      <LocalAICard audience="plan" online={online} />
       <h2>Insignias <small>{earned.size}/{Object.keys(BADGES).length}</small></h2>
       <ul className="badge-grid" data-testid="badges">
         {Object.entries(BADGES).map(([code, b]) => {

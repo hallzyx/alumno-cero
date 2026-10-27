@@ -55,7 +55,29 @@ Bienvenida con resultado a la vista → objetivo (tema + para qué) → friccion
 
 ## Hub digital (cuentas, niveles y recursos)
 
-- **Cuentas:** usuario + contraseña (hash `scrypt`, sesión en cookie `httpOnly`). Sin correo: pensado para chicos de colegio. También se puede usar sin cuenta (progreso solo en el navegador).
+- **Cuentas:** usuario + contraseña (hash `scrypt`, sesión en cookie `httpOnly`). Sin correo: pensado para chicos de colegio. Una cuenta siempre tiene un **plan**; sin cuenta se usa como **invitado**.
+
+### Invitado y planes (el pago es una simulación)
+
+| | Invitado | Familia | Familia+ | Colegios |
+|---|---|---|---|---|
+| Entrada | solo texto | texto y voz | texto y voz | texto y voz |
+| IA | en el navegador (WebGPU) | nube (OpenRouter) + navegador sin internet | ídem | ídem |
+| Progreso | en el dispositivo | sincronizado en la nube | ídem | ídem |
+| Estudiantes | 1 | 1 | hasta 4 perfiles + panel familiar | alumnos en aulas + panel docente |
+
+- Los precios son **de demostración**: no hay pasarela de pago ni se piden datos de tarjeta. El paso de pago exige marcar que se entiende que es una simulación y está etiquetado como tal en todas partes.
+- La IA en la nube (`/api/analyze`, `/api/exam`, `/api/cero`, `/api/transcribe`) **solo la pueden usar cuentas con plan**: el servidor lo comprueba para que nadie gaste la API key sin cuenta.
+- Perfiles: la cuenta (el adulto) añade hijos o alumnos y cambia de perfil; cada perfil tiene su propio hub, nivel, insignias y fichas. Los perfiles no inician sesión solos. En esta demo no hay PIN para volver al modo adulto.
+- Rutas: `/planes`, `/familia` (Familia+) y `/aulas` (Colegios), además de las de antes.
+
+### IA en el navegador (WebGPU) y modo sin conexión
+
+- **Invitados:** el análisis y el examen los hace un modelo pequeño que corre en la GPU del dispositivo (WebLLM, `Qwen2.5-1.5B-Instruct`, ~1 GB, descarga única con consentimiento y progreso real). Los textos no salen del dispositivo. Usa el mismo prompt compacto y **las mismas validaciones** (citas literales, respuestas verificadas por el solver). Si el navegador no tiene WebGPU o el invitado elige el modo básico, se usa el motor determinista.
+- **Cuentas con plan:** nube → IA del navegador → modo básico. La IA del navegador es el respaldo cuando no hay conexión con OpenRouter (hay que haberla descargado antes, con internet: el hub tiene la tarjeta «Estudiar sin internet»).
+- **Service worker** (`public/sw.js`, solo en producción): guarda la app y sus archivos al abrirla con internet; después carga sin conexión. Los modelos y la API no pasan por él.
+- **Cola de sincronización** (`src/lib/offline.js`): sin conexión, el progreso sigue en `localStorage`; en cuentas con plan, los cambios que no llegan al servidor se encolan y se reenvían al volver internet (operaciones idempotentes). Se ve un aviso de conexión y de sincronización.
+- Límites: la IA del navegador es más pequeña que la de la nube (puede equivocarse más; por eso se valida todo); la primera visita necesita internet; el XP de lo hecho sin conexión se suma al sincronizar.
 - **Base de datos MySQL/MariaDB** (`root`, sin contraseña, puerto `33065`; la base `alumno_cero` y sus tablas se crean solas): `learners`, `auth_sessions`, `learning_sessions` (retomar donde lo dejaste), `attempts` (cada examen con su análisis), `mastery_cards`, `xp_log`, `badges`.
 - **Gamificación:** XP por examen, aprobar, aprobar al primer intento, ficha de dominio, práctica y primer estudio del día; 10 niveles con títulos escolares; racha de días; 10 insignias. Todo se calcula en el servidor y es idempotente (no se puede ganar dos veces el mismo XP).
 - **Materias y experiencia distinta:** *Matemática* (procedimiento paso a paso, simuladores interactivos) y *Ciencias* (causas y porqués, diagramas que se tocan). Cada tema trae su «mochila»: glosario, ejemplo resuelto, truco y simulador/diagrama. 5 temas: interés compuesto, descuentos sucesivos, regla de tres, fotosíntesis y ciclo del agua.
@@ -74,7 +96,7 @@ Con cuenta, tu progreso, fichas y texto de los exámenes se guardan en la base d
 npm install
 cp .env.example .env     # y pega tu OPENROUTER_API_KEY; ajusta DB_* si tu MySQL no es root/33065
 npm run dev              # http://localhost:3000
-npm test                 # pruebas del motor
+npm test                 # pruebas del motor, de los planes, de la cola sin conexión y del service worker
 npm run build && npm start
 ```
 
@@ -85,4 +107,4 @@ Nota: al migrar a Next.js se eliminó el service worker (el modo 100 % offline d
 
 ## Aporte propio y herramientas
 
-Idea, producto y dirección de Brayan Ccarita. Se usaron asistentes de IA (Claude) para generar buena parte del código y del diseño, con pruebas automáticas del motor y del recorrido completo. Dependencias de runtime: Next.js y React.
+Idea, producto y dirección de Brayan Ccarita. Se usaron asistentes de IA (Claude) para generar buena parte del código y del diseño, con pruebas automáticas del motor y del recorrido completo. Dependencias de runtime: Next.js, React, mysql2, lucide-react, fuentes de @fontsource y @mlc-ai/web-llm.

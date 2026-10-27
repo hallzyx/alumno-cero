@@ -5,6 +5,8 @@ import { useRef, useState } from "react";
 import { ArrowRight, Eye, EyeOff, LoaderCircle, Save } from "lucide-react";
 import Avatar, { AVATARS } from "./Avatar";
 import { CeroSays } from "./Cero";
+import { DemoTag, MockCheckout } from "./PlanCards";
+import { PLAN_LIST } from "@/lib/plans";
 
 const GRADES = [
   { id: "primaria-alta", label: "Primaria (5.º o 6.º)" },
@@ -22,12 +24,14 @@ function check(form, mode) {
   else if (mode === "register" && !/^[a-z0-9_]{3,20}$/.test(u)) errors.username = "Usa de 3 a 20 letras minúsculas, números o _ (sin espacios ni tildes).";
   if (!form.password) errors.password = "Escribe tu contraseña.";
   else if (mode === "register" && form.password.length < 4) errors.password = "Tu contraseña necesita al menos 4 caracteres.";
+  if (mode === "register" && !form.plan) errors.plan = "Elige un plan para crear tu cuenta.";
+  if (mode === "register" && form.plan && !form.ack) errors.ack = "Marca la casilla para confirmar que entiendes que es una simulación.";
   return errors;
 }
 
-export default function Auth({ dbOk, initialMode = "register", saving = "", onDone, onSkip, skipLabel = "Seguir sin cuenta" }) {
+export default function Auth({ dbOk, initialMode = "register", initialPlan = null, saving = "", onDone, onSkip, skipLabel = "Seguir sin cuenta" }) {
   const [mode, setMode] = useState(initialMode);
-  const [form, setForm] = useState({ username: "", password: "", nickname: "", avatar: "zero", grade: "secundaria-1" });
+  const [form, setForm] = useState({ username: "", password: "", nickname: "", avatar: "zero", grade: "secundaria-1", plan: initialPlan, ack: false });
   const [errors, setErrors] = useState({});
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -57,7 +61,8 @@ export default function Auth({ dbOk, initialMode = "register", saving = "", onDo
       const r = await fetch(`/api/auth/${mode === "register" ? "register" : "login"}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) });
       const j = await r.json().catch(() => ({}));
       if (!r.ok) {
-        if (r.status === 409) { setErrors({ username: j.error }); formRef.current?.querySelector('[name="username"]')?.focus(); setBusy(false); return; }
+        const field = r.status === 409 ? "username" : ["username", "password", "plan"].includes(j.field) ? j.field : null;
+        if (field) { setErrors({ [field]: j.error }); formRef.current?.querySelector(`[name="${field}"]`)?.focus(); setBusy(false); return; }
         throw new Error(r.status === 503 ? "No pude conectar con el servidor de cuentas. Prueba en un rato o sigue sin cuenta: tu avance queda en este navegador." : j.error || "No se pudo continuar. Revisa tus datos.");
       }
       await onDone(Boolean(saving) && keep);
@@ -77,7 +82,7 @@ export default function Auth({ dbOk, initialMode = "register", saving = "", onDo
     <section aria-labelledby="h-auth" data-testid="auth" className="auth">
       <CeroSays mood="curioso">{saving ? "¡Guardo todo lo que lograste para que no se pierda!" : reg ? "¡Crea tu cuenta y guardo todo lo que aprendas!" : "¡Qué bueno verte de nuevo!"}</CeroSays>
       <h1 id="h-auth">{saving ? "Guarda tu progreso" : reg ? "Crea tu cuenta" : "Entra a tu cuenta"}</h1>
-      <p className="lead">{reg ? "Es gratis y opcional. Solo pedimos un usuario y una contraseña: sin correo." : "Escribe tu usuario y tu contraseña."}</p>
+      <p className="lead">{reg ? "Elige un plan y crea tu cuenta. Solo pedimos un usuario y una contraseña: sin correo. El pago es una simulación: no se cobra nada." : "Escribe tu usuario y tu contraseña."}</p>
       {!dbOk && <p className="flash flash-error" role="alert">El servidor de cuentas no responde ahora. Puedes intentarlo igual o seguir sin cuenta: tu progreso quedará en este navegador.</p>}
 
       <div className="seg auth-tabs" role="group" aria-label="¿Qué quieres hacer?">
@@ -132,6 +137,21 @@ export default function Auth({ dbOk, initialMode = "register", saving = "", onDo
               <label htmlFor="f-grade">Tu grado</label>
               <select id="f-grade" name="grade" value={form.grade} onChange={up("grade")}>{GRADES.map((g) => <option key={g.id} value={g.id}>{g.label}</option>)}</select>
             </div>
+            <fieldset className="field plan-pick" aria-describedby={errors.plan ? "err-plan" : undefined}>
+              <legend>Tu plan <DemoTag /></legend>
+              <div className="plan-pick-row">
+                {PLAN_LIST.map((p) => (
+                  <label key={p.id} className={`plan-opt ${form.plan === p.id ? "on" : ""}`}>
+                    <input type="radio" name="plan" value={p.id} checked={form.plan === p.id} onChange={() => { setForm((f) => ({ ...f, plan: p.id })); setErrors((x) => ({ ...x, plan: undefined })); }} data-testid={`auth-plan-${p.id}`} />
+                    <strong>{p.name}</strong>
+                    <span>{p.priceText}{p.price ? "/mes" : ""}</span>
+                    <small>{p.tagline}</small>
+                  </label>
+                ))}
+              </div>
+              {errors.plan && <p className="field-error" id="err-plan" data-testid="auth-error-plan">{errors.plan}</p>}
+            </fieldset>
+            {form.plan && <MockCheckout plan={form.plan} ack={form.ack} onAck={(v) => { setForm((f) => ({ ...f, ack: v })); setErrors((x) => ({ ...x, ack: undefined })); }} error={errors.ack} />}
           </>
         )}
         <div aria-live="assertive">
@@ -144,7 +164,7 @@ export default function Auth({ dbOk, initialMode = "register", saving = "", onDo
           </button>
           <button type="button" className="btn btn-ghost" onClick={onSkip} data-testid="auth-skip">{skipLabel}</button>
         </div>
-        <p className="note">Crear una cuenta es opcional y gratis. Guarda tu nivel, insignias y fichas para verlos desde cualquier equipo.</p>
+        <p className="note">La cuenta es opcional: como invitado puedes usar todo en este dispositivo. Con un plan guardas tu nivel, insignias y fichas en la nube, usas la IA en la nube y el dictado por voz, y sigues sin internet.</p>
       </form>
     </section>
   );

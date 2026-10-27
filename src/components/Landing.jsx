@@ -6,13 +6,14 @@ import {
   Highlighter, Lock, Mic, PencilLine, RotateCcw, School, ShieldCheck, Sparkles, Trophy, Users, X,
 } from "lucide-react";
 import { SUBJECTS } from "@/lib/subjects";
-import { TOPICS } from "@/lib/topics";
+import { TOPICS, getTopic } from "@/lib/topics";
 import { Cero } from "./Cero";
+import { Pricing } from "./PlanCards";
 
 const I = ({ as: Icon, size = 22 }) => <Icon size={size} strokeWidth={2.4} aria-hidden="true" focusable="false" className="ico" />;
 const SUBJECT_ICON = { matematica: Calculator, ciencias: FlaskConical };
 
-export default function Landing({ ai, dbOk, hasProgress, onStart, onResume, onLogin, onStartTopic }) {
+export default function Landing({ ai, dbOk, hasProgress, onStart, onResume, onLogin, onStartTopic, onChoosePlan, journal = [] }) {
   return (
     <div className="landing">
       {/* ------------------------------------------------------------ hero */}
@@ -31,10 +32,23 @@ export default function Landing({ ai, dbOk, hasProgress, onStart, onResume, onLo
             ? <p className="hero-login">¿Ya tienes cuenta? <button type="button" className="linkish" onClick={onLogin} data-testid="welcome-login">Entrar</button></p>
             : <p className="hero-login" data-testid="db-down-note">Las cuentas no están disponibles ahora mismo. Puedes usar todo sin cuenta: tu avance se guarda en este navegador.</p>}
           <ul className="trust" aria-label="Lo básico">
-            <li><I as={Gift} size={18} /> Gratis, sin planes de pago</li>
+            <li><I as={Gift} size={18} /> Gratis para probar</li>
             <li><I as={Lock} size={18} /> Sin correo para probar</li>
             <li><I as={Sparkles} size={18} /> Unos 5 minutos</li>
           </ul>
+          {journal.length > 0 && (
+            <details className="journal" data-testid="journal">
+              <summary>Tus fichas en este dispositivo ({journal.length})</summary>
+              <ul>
+                {journal.map((c) => (
+                  <li key={`${c.topicId}-${c.at}`}>
+                    <strong>{getTopic(c.topicId)?.emoji} {getTopic(c.topicId)?.title ?? c.topicId}</strong> <small>{new Date(c.at).toLocaleDateString("es-PE", { day: "numeric", month: "short" })}</small>
+                    <p>{c.text}</p>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
         </div>
 
         <figure className="specimen" data-testid="demo-example">
@@ -120,6 +134,9 @@ export default function Landing({ ai, dbOk, hasProgress, onStart, onResume, onLo
         </div>
       </section>
 
+      {/* ----------------------------------------------------------- pricing */}
+      <Pricing onGuest={onStart} onChoose={onChoosePlan} />
+
       {/* ------------------------------------------------ parents & teachers */}
       <section className="lp-section" id="familias" aria-labelledby="h-family">
         <h2 id="h-family" className="lp-h2">Para familias y docentes</h2>
@@ -147,12 +164,12 @@ export default function Landing({ ai, dbOk, hasProgress, onStart, onResume, onLo
       <section className="lp-section" id="datos" aria-labelledby="h-data">
         <h2 id="h-data" className="lp-h2">Tus datos, claros</h2>
         <ul className="lp-facts" data-testid="transparency">
-          <li><span className="lp-fact-ico"><I as={Gift} /></span><div><strong>Es gratis</strong><p>No hay planes de pago ni compras. Todo lo que ves se puede usar sin pagar.</p></div></li>
-          <li><span className="lp-fact-ico"><I as={Lock} /></span><div><strong>Sin cuenta</strong><p>Tu avance se guarda solo en este navegador. Lo borras cuando quieras con «Empezar de nuevo».</p></div></li>
-          <li><span className="lp-fact-ico"><I as={Database} /></span><div><strong>Con cuenta (opcional)</strong><p>Guardamos tu usuario, apodo, avatar, grado, la contraseña cifrada y tu avance (explicaciones, exámenes, XP). Sin correo.</p></div></li>
-          <li><span className="lp-fact-ico"><I as={Mic} /></span><div><strong>IA y micrófono</strong><p>{ai.configured
-            ? "Tu explicación se envía a un modelo de IA (vía OpenRouter) solo cuando se la enseñas a Cero, cuando hace su examen o cuando le pides que te cuente lo que entendió. Si la IA falla, Cero usa un modo básico. El micrófono solo se usa si eliges hablar y tocas el botón; no guardamos el audio."
-            : "Aquí la IA está apagada: tu explicación se revisa en tu equipo, sin enviarla a nadie. El micrófono solo se usa si eliges hablar y tocas el botón."}</p></div></li>
+          <li><span className="lp-fact-ico"><I as={Gift} /></span><div><strong>Gratis para probar</strong><p>Como invitado usas todo sin pagar ni registrarte. Los planes de la sección de precios son una <strong>demostración</strong>: no hay cobro real ni se piden datos de tarjeta.</p></div></li>
+          <li><span className="lp-fact-ico"><I as={Lock} /></span><div><strong>Invitado: todo en tu dispositivo</strong><p>Tu avance se guarda solo en este navegador y la IA corre en tu propio equipo (WebGPU), así que tus textos no salen de aquí. Solo escribes (sin voz) y funciona sin internet una vez cargada. Lo borras con «Empezar de nuevo».</p></div></li>
+          <li><span className="lp-fact-ico"><I as={Database} /></span><div><strong>Con un plan (cuenta)</strong><p>Guardamos tu usuario, apodo, avatar, grado, la contraseña cifrada, tu plan y tu avance (explicaciones, exámenes, XP). Sin correo. Si no hay internet, sigues con la IA del navegador y todo se sincroniza al volver.</p></div></li>
+          <li><span className="lp-fact-ico"><I as={Mic} /></span><div><strong>IA en la nube y micrófono</strong><p>{ai.configured
+            ? "Con un plan, tu explicación se envía a un modelo de IA (vía OpenRouter) cuando se la enseñas a Cero, cuando hace su examen o cuando le pides que te cuente lo que entendió. Si falla, Cero usa la IA del navegador y, si no hay, un modo básico. El micrófono solo se usa si eliges hablar y tocas el botón; el audio se envía para pasarlo a texto y no se guarda."
+            : "Aquí la IA en la nube está apagada: tu explicación se revisa en tu equipo, sin enviarla a nadie."}</p></div></li>
         </ul>
       </section>
 
@@ -187,6 +204,7 @@ export function LandingNav({ dbOk, onStart, onLogin }) {
       <ul className="lp-links">
         <li><a href="#como-funciona">Cómo funciona</a></li>
         <li><a href="#materias">Materias</a></li>
+        <li><a href="#planes">Planes</a></li>
         <li><a href="#familias">Familias y docentes</a></li>
         <li><a href="#datos">Tus datos</a></li>
       </ul>
@@ -202,12 +220,13 @@ export function LandingFooter() {
       <div className="lp-footer-cols">
         <div>
           <p className="lp-footer-brand"><Cero mood="curioso" decorative /> Alumno <span>Cero</span></p>
-          <p>Aprende enseñando. Gratis, sin anuncios y sin correo.</p>
+          <p>Aprende enseñando. Gratis para probar, sin anuncios y sin correo.</p>
         </div>
         <nav aria-label="Pie de página">
           <ul>
             <li><a href="#como-funciona">Cómo funciona</a></li>
             <li><a href="#materias">Materias</a></li>
+        <li><a href="#planes">Planes</a></li>
             <li><a href="#familias">Familias y docentes</a></li>
             <li><a href="#datos">Tus datos</a></li>
           </ul>
