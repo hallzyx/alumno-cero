@@ -44,3 +44,15 @@ export function save(state) {
 export function clear() {
   try { localStorage.removeItem(KEY); } catch { /* ignore */ }
 }
+
+// Mastery cards earned on this device (guests): the current journey lives in `state`, finished ones are kept here.
+const JOURNAL = "alumno-cero:journal";
+export function readJournal() {
+  try { return JSON.parse(localStorage.getItem(JOURNAL)) ?? []; } catch { return []; }
+}
+export function addToJournal(card) {
+  try {
+    const all = readJournal().filter((c) => !(c.topicId === card.topicId && c.at === card.at));
+    localStorage.setItem(JOURNAL, JSON.stringify([card, ...all].slice(0, 50)));
+  } catch { /* storage unavailable */ }
+}
