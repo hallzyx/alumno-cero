@@ -36,7 +36,7 @@ export default function Hub({ onContinue, onStartTopic, onExpired, refreshKey, a
   if (error && !online) return (
     <section data-testid="hub" aria-labelledby="h-hub">
       <h1 id="h-hub">Mi hub</h1>
-      <p className="note note-box" data-testid="hub-offline">Estás sin conexión, así que no puedo mostrar tu nivel ni tus fichas ahora. <strong>Puedes seguir practicando</strong>: tu avance se guarda en este dispositivo y se sincroniza cuando vuelva internet.</p>
+      <p className="note note-box" data-testid="hub-offline">Estás sin conexión, así que no puedo mostrar tu nivel ni tus fichas ahora. <strong>Puedes seguir practicando</strong>: tu avance se guarda en este aparato y se sube a tu cuenta cuando vuelva internet.</p>
       <div className="hub-subjects">
         {Object.values(SUBJECTS).map((sub) => (
           <article key={sub.id} className={`subject-card subject-${sub.tone}`}>
@@ -88,7 +88,7 @@ export default function Hub({ onContinue, onStartTopic, onExpired, refreshKey, a
 
       {planOf(account?.plan) && (
         <div className="plan-strip" data-testid="plan-strip">
-          <p><strong>Plan {planOf(account.plan).name}</strong> · IA en la nube · dictado por voz · progreso sincronizado</p>
+          <p><strong>Plan {planOf(account.plan).name}</strong> · hablar con Cero · progreso guardado en tu cuenta</p>
           <div className="plan-strip-actions">
             {caps.family && <button type="button" className="btn btn-secondary btn-sm" onClick={() => onGo("family")} data-testid="hub-family">Panel familiar</button>}
             {caps.classrooms && <button type="button" className="btn btn-secondary btn-sm" onClick={() => onGo("classes")} data-testid="hub-classes">Panel docente</button>}
@@ -184,7 +184,7 @@ export default function Hub({ onContinue, onStartTopic, onExpired, refreshKey, a
           <h2>Última actividad</h2>
           <ul className="recent">
             {recent.map((a, i) => (
-              <li key={i}><span className={`dot ${a.passed ? "dot-ok" : "dot-bad"}`} aria-hidden="true" /> {getTopic(a.topicId)?.title}: intento {a.attemptNo} — {a.passed ? "Cero aprobó" : "Cero falló"} <small>{fmtDate(a.at)}{a.ai ? " · con IA" : ""}</small></li>
+              <li key={i}><span className={`dot ${a.passed ? "dot-ok" : "dot-bad"}`} aria-hidden="true" /> {getTopic(a.topicId)?.title}: intento {a.attemptNo} — {a.passed ? "Cero aprobó" : "Cero falló"} <small>{fmtDate(a.at)}</small></li>
             ))}
           </ul>
         </>

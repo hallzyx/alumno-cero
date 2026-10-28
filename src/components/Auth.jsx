@@ -63,7 +63,7 @@ export default function Auth({ dbOk, initialMode = "register", initialPlan = nul
       if (!r.ok) {
         const field = r.status === 409 ? "username" : ["username", "password", "plan"].includes(j.field) ? j.field : null;
         if (field) { setErrors({ [field]: j.error }); formRef.current?.querySelector(`[name="${field}"]`)?.focus(); setBusy(false); return; }
-        throw new Error(r.status === 503 ? "No pude conectar con el servidor de cuentas. Prueba en un rato o sigue sin cuenta: tu avance queda en este navegador." : j.error || "No se pudo continuar. Revisa tus datos.");
+        throw new Error(r.status === 503 ? "Ahora no pude abrir las cuentas. Prueba en un rato o sigue sin cuenta: tu avance queda guardado en este aparato." : j.error || "No se pudo continuar. Revisa tus datos.");
       }
       await onDone(Boolean(saving) && keep);
     } catch (err) {
@@ -83,7 +83,7 @@ export default function Auth({ dbOk, initialMode = "register", initialPlan = nul
       <CeroSays mood="curioso">{saving ? "¡Guardo todo lo que lograste para que no se pierda!" : reg ? "¡Crea tu cuenta y guardo todo lo que aprendas!" : "¡Qué bueno verte de nuevo!"}</CeroSays>
       <h1 id="h-auth">{saving ? "Guarda tu progreso" : reg ? "Crea tu cuenta" : "Entra a tu cuenta"}</h1>
       <p className="lead">{reg ? "Elige un plan y crea tu cuenta. Solo pedimos un usuario y una contraseña: sin correo. El pago es una simulación: no se cobra nada." : "Escribe tu usuario y tu contraseña."}</p>
-      {!dbOk && <p className="flash flash-error" role="alert">El servidor de cuentas no responde ahora. Puedes intentarlo igual o seguir sin cuenta: tu progreso quedará en este navegador.</p>}
+      {!dbOk && <p className="flash flash-error" role="alert">Las cuentas no están funcionando ahora. Puedes intentarlo igual o seguir sin cuenta: tu progreso queda guardado en este aparato.</p>}
 
       <div className="seg auth-tabs" role="group" aria-label="¿Qué quieres hacer?">
         <button type="button" aria-pressed={reg} className={`btn ${reg ? "btn-primary" : "btn-secondary"}`} onClick={() => switchMode("register")} data-testid="auth-tab-register">Crear cuenta</button>
@@ -164,7 +164,7 @@ export default function Auth({ dbOk, initialMode = "register", initialPlan = nul
           </button>
           <button type="button" className="btn btn-ghost" onClick={onSkip} data-testid="auth-skip">{skipLabel}</button>
         </div>
-        <p className="note">La cuenta es opcional: como invitado puedes usar todo en este dispositivo. Con un plan guardas tu nivel, insignias y fichas en la nube, usas la IA en la nube y el dictado por voz, y sigues sin internet.</p>
+        <p className="note">La cuenta es opcional: como invitado puedes usar todo en este aparato. Con un plan guardas tu nivel, tus insignias y tus fichas en tu cuenta, puedes hablarle a Cero con tu voz y sigues estudiando aunque se vaya el internet.</p>
       </form>
     </section>
   );

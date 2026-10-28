@@ -38,7 +38,7 @@ export default function Landing({ ai, dbOk, hasProgress, onStart, onResume, onLo
           </ul>
           {journal.length > 0 && (
             <details className="journal" data-testid="journal">
-              <summary>Tus fichas en este dispositivo ({journal.length})</summary>
+              <summary>Tus fichas en este aparato ({journal.length})</summary>
               <ul>
                 {journal.map((c) => (
                   <li key={`${c.topicId}-${c.at}`}>
@@ -165,11 +165,11 @@ export default function Landing({ ai, dbOk, hasProgress, onStart, onResume, onLo
         <h2 id="h-data" className="lp-h2">Tus datos, claros</h2>
         <ul className="lp-facts" data-testid="transparency">
           <li><span className="lp-fact-ico"><I as={Gift} /></span><div><strong>Gratis para probar</strong><p>Como invitado usas todo sin pagar ni registrarte. Los planes de la sección de precios son una <strong>demostración</strong>: no hay cobro real ni se piden datos de tarjeta.</p></div></li>
-          <li><span className="lp-fact-ico"><I as={Lock} /></span><div><strong>Invitado: todo en tu dispositivo</strong><p>Tu avance se guarda solo en este navegador y la IA corre en tu propio equipo (WebGPU), así que tus textos no salen de aquí. Solo escribes (sin voz) y funciona sin internet una vez cargada. Lo borras con «Empezar de nuevo».</p></div></li>
-          <li><span className="lp-fact-ico"><I as={Database} /></span><div><strong>Con un plan (cuenta)</strong><p>Guardamos tu usuario, apodo, avatar, grado, la contraseña cifrada, tu plan y tu avance (explicaciones, exámenes, XP). Sin correo. Si no hay internet, sigues con la IA del navegador y todo se sincroniza al volver.</p></div></li>
-          <li><span className="lp-fact-ico"><I as={Mic} /></span><div><strong>IA en la nube y micrófono</strong><p>{ai.configured
-            ? "Con un plan, tu explicación se envía a un modelo de IA (vía OpenRouter) cuando se la enseñas a Cero, cuando hace su examen o cuando le pides que te cuente lo que entendió. Si falla, Cero usa la IA del navegador y, si no hay, un modo básico. El micrófono solo se usa si eliges hablar y tocas el botón; el audio se envía para pasarlo a texto y no se guarda."
-            : "Aquí la IA en la nube está apagada: tu explicación se revisa en tu equipo, sin enviarla a nadie."}</p></div></li>
+          <li><span className="lp-fact-ico"><I as={Lock} /></span><div><strong>Invitado: todo en tu aparato</strong><p>Tu avance se guarda solo en este navegador y Cero lee dentro de tu propio aparato, así que lo que escribes no sale de aquí. Solo escribes (sin voz) y funciona sin internet una vez cargada. Lo borras con «Empezar de nuevo».</p></div></li>
+          <li><span className="lp-fact-ico"><I as={Database} /></span><div><strong>Con un plan (cuenta)</strong><p>Guardamos tu usuario, apodo, avatar, grado, la contraseña cifrada, tu plan y tu avance (explicaciones, exámenes, XP). Sin correo. Si se va el internet, sigues estudiando y tu avance se guarda en tu cuenta cuando vuelva.</p></div></li>
+          <li><span className="lp-fact-ico"><I as={Mic} /></span><div><strong>Cero en internet y micrófono</strong><p>{ai.configured
+            ? "Con un plan, tu explicación viaja por internet a un servicio externo cuando se la enseñas a Cero, cuando hace su examen o cuando le pides que te cuente lo que entendió. Si falla, Cero sigue leyendo dentro de tu aparato o con las reglas del tema. El micrófono solo se usa si eliges hablar y tocas el botón; el audio se manda para pasarlo a texto y no se guarda."
+            : "Aquí el servicio de internet está apagado: tu explicación se lee en tu aparato, sin enviarla a nadie."}</p></div></li>
         </ul>
       </section>
 

@@ -209,7 +209,7 @@ export default function AlumnoCero() {
       const res = await flushOutbox(pid);
       setPendingSync(res.left);
       if (res.expired) return expire();
-      if (res.sent) setSyncNote(`Listo: se sincronizaron ${res.sent} ${res.sent === 1 ? "cambio" : "cambios"} con tu cuenta.`);
+      if (res.sent) setSyncNote("¡Listo! Tu avance ya está guardado en tu cuenta.");
       const last = res.rewards.at(-1);
       if (last) { setReward(mergeRewards(res.rewards)); setLearner((l) => (l ? { ...l, level: last.level } : l)); }
     };
@@ -509,7 +509,7 @@ export default function AlumnoCero() {
       if (!check.ok) return setFlash({ kind: "error", text: check.message });
       // Without cloud AI the in-browser AI needs a one-time download: ask first, or let the learner pick the basic engine.
       if (!cloudAvailable && localAI.checked && localAI.supported && !localReady && !basicChosen && localAI.phase !== "error") {
-        setFlash({ kind: "error", text: "Antes de seguir, descarga la IA de tu navegador o elige el modo básico (en el recuadro de abajo)." });
+        setFlash({ kind: "error", text: "Antes de seguir, elige en el recuadro de abajo: preparar el cerebro de Cero en tu aparato o usar la lectura sencilla." });
         return document.querySelector('[data-testid="local-ai"]')?.scrollIntoView({ block: "center" });
       }
       await analyzeText(state.text);
@@ -790,7 +790,7 @@ export default function AlumnoCero() {
       if (yes.includes("bloqueo")) bits.push("Te pones en blanco: antes del examen, Cero te dirá sus dudas para que completes tu explicación con calma.");
       if (yes.includes("poco")) bits.push("Tienes poco tiempo: si Cero falla, la práctica es de solo 2 preguntas.");
       if (yes.includes("nose")) bits.push("Nadie te dice tu error: si Cero falla, verás marcada la frase exacta que lo confundió.");
-      if (yes.includes("sinnet")) bits.push("Internet inestable: la app funciona sin conexión, tu avance se guarda en este dispositivo y Cero puede leerte con la IA del navegador.");
+      if (yes.includes("sinnet")) bits.push("Internet inestable: la app funciona sin conexión y tu avance se guarda en este aparato.");
       const g = GOALS.find((x) => x.id === state.goal);
       const ask = topic.concepts[1]?.ask[state.level] ?? topic.concepts[0].ask[state.level];
       const voice = state.inputMode === "voice" && voiceOk;
@@ -829,7 +829,7 @@ export default function AlumnoCero() {
               <ul className="check">
                 <li><strong>Para qué:</strong> para que le expliques a Cero hablando, como en clase.</li>
                 <li><strong>Cuándo:</strong> solo mientras tocas el botón grande. Nunca escucha en segundo plano.</li>
-                <li><strong>Qué pasa con tu voz:</strong> "se envía a un servicio de IA (OpenRouter) para pasarla a texto. Alumno Cero no guarda el audio."</li>
+                <li><strong>Qué pasa con tu voz:</strong> "se manda por internet a un servicio externo que la convierte en texto. Alumno Cero no guarda el audio."</li>
                 <li><strong>Permiso:</strong> tu navegador te lo pedirá la primera vez. Si dices que no, puedes escribir igual.</li>
               </ul>
               <Btn cls="btn-secondary" onClick={() => set({ inputMode: "text" })} testid="mic-decline"><I as={Keyboard} size={20} /> Prefiero escribir</Btn>
@@ -916,17 +916,17 @@ export default function AlumnoCero() {
         <section className="reading" aria-labelledby="h-read">
           <Cero mood="pensando" cls="cero-xl cero-think" />
           <h1 id="h-read">Cero está leyendo…</h1>
-          <p className="lead" data-testid="processing" role="status">{busy === "analyze" ? (busyEngine === "webgpu" ? "Estoy leyendo tu explicación con la IA de tu navegador: tu texto no sale de este dispositivo." : "Estoy leyendo tu explicación con IA para ver qué ideas me enseñaste.") : "Revisé tu explicación en tu equipo, sin enviarla a ningún servidor."}</p>
+          <p className="lead" data-testid="processing" role="status">{busy === "analyze" ? (busyEngine === "webgpu" ? "Estoy leyendo con calma lo que me explicaste. Tu texto se queda en tu aparato." : "Estoy leyendo con calma lo que me explicaste para ver qué ideas me enseñaste.") : "Ya leí lo que me explicaste, aquí mismo en tu aparato."}</p>
           <ol className="proc-steps" data-testid="proc-steps">
-            <li className="done"><span className="proc-ico"><I as={Check} size={18} /></span> Revisé tu texto: {a.log.sentences} {a.log.sentences === 1 ? "frase" : "frases"} y {a.log.matched} {a.log.matched === 1 ? "idea clave" : "ideas clave"}.</li>
+            <li className="done"><span className="proc-ico"><I as={Check} size={18} /></span> Leí tu texto: tiene {a.log.sentences} {a.log.sentences === 1 ? "frase" : "frases"}.</li>
             {busy === "analyze" && (
               <>
-                <li className="now"><span className="proc-ico"><span className="spin"><I as={LoaderCircle} size={18} /></span></span> {busyEngine === "webgpu" ? <>Mi IA (en tu navegador, con WebGPU) está leyendo tu texto… <span className="proc-time" aria-hidden="true">{elapsed} s</span></> : <>Lo envié a la IA ({ai.writingModel}) y espero su lectura… <span className="proc-time" aria-hidden="true">{elapsed} s</span></>}</li>
-                <li className="todo"><span className="proc-ico" aria-hidden="true">3</span> Después compruebo que cada cita sea una frase tuya, palabra por palabra.</li>
+                <li className="now"><span className="proc-ico"><span className="spin"><I as={LoaderCircle} size={18} /></span></span> <>Estoy leyendo lo que escribiste, frase por frase… <span className="proc-time" aria-hidden="true">{elapsed} s</span></></li>
+                <li className="todo"><span className="proc-ico" aria-hidden="true">3</span> Al final te muestro tus frases, tal cual las escribiste, para que veas qué entendí de cada una.</li>
               </>
             )}
           </ol>
-          {busy === "analyze" && busyEngine === "cloud" && elapsed >= 12 && <p className="note" data-testid="slow-note">La IA está tardando un poco. Si pasa de {AI_TIMEOUT / 1000} s, sigo con mi modo básico para que no esperes.</p>}
+          {busy === "analyze" && busyEngine === "cloud" && elapsed >= 12 && <p className="note" data-testid="slow-note">Cero está pensando un poquito más de lo normal. Si se demora demasiado, sigo con una lectura más sencilla para que no tengas que esperar.</p>}
           <div className="spinner" aria-hidden="true"><span /><span /><span /></div>
         </section>
       );
@@ -938,9 +938,9 @@ export default function AlumnoCero() {
       return (
         <section aria-labelledby="h-reflect">
           <div className="cero-row cero-row-title"><Cero mood={qs.length ? "curioso" : "feliz"} cls="cero-lg" /><h1 id="h-reflect">Esto es lo que entendí</h1></div>
-          {state.analysis.log?.ai && <p className="note" data-testid="ai-note"><I as={Sparkles} size={16} /> {state.analysis.log.provider === "webgpu" ? "Analizado con la IA de tu navegador (WebGPU): tu texto no salió de este dispositivo. Cada cita se verifica palabra por palabra." : `Analizado con IA en la nube (${ai.writingModel}). Cero escribió lo que entendió y sus dudas con IA, usando solo tus frases (cada cita se verifica palabra por palabra).`}</p>}
-          {state.analysis.log?.fallback && <p className="note note-box" data-testid="ai-fallback">{state.analysis.log.why ? `La IA de tu navegador no pudo leerte esta vez (${state.analysis.log.why}), así que usé el análisis básico de tu equipo. Puedes seguir igual.` : "La IA no respondió a tiempo (o no respondió bien), así que usé el análisis básico de tu equipo. Puedes seguir igual."}</p>}
-          {!state.analysis.log?.ai && !state.analysis.log?.fallback && <p className="note" data-testid="basic-note">Cero te leyó con su modo básico: reglas del tema, sin IA.</p>}
+          {state.analysis.log?.ai && <p className="note" data-testid="ai-note"><I as={Sparkles} size={16} /> {state.analysis.log.provider === "webgpu" ? "Cero leyó tu explicación dentro de tu aparato: tu texto no salió de aquí. Las frases que ves marcadas son tuyas, palabra por palabra." : "Cero leyó tu explicación y escribió lo que entendió y sus dudas usando solo tus frases. Las frases que ves marcadas son tuyas, palabra por palabra."}</p>}
+          {state.analysis.log?.fallback && <p className="note note-box" data-testid="ai-fallback" title={state.analysis.log.why || undefined}>Esta vez Cero no logró leer tu explicación con todo su cerebro, así que la leyó con sus reglas del tema. Puedes seguir igual.</p>}
+          {!state.analysis.log?.ai && !state.analysis.log?.fallback && <p className="note" data-testid="basic-note">Cero leyó tu explicación con las reglas del tema.</p>}
           <ul className="understood" data-testid="understood">
             {refl.map((r) => (
               <li key={r.conceptId} className={`card note-card ${r.state}`}>
@@ -967,7 +967,7 @@ export default function AlumnoCero() {
             : <p className="note note-box">No tengo dudas. ¡Creo que puedo intentarlo!</p>}
           {cloudAvailable && (
             <div className="ai-box" data-testid="cero-ai">
-              <h2 className="plan-title"><I as={Sparkles} size={20} /> Cero con IA <small className="chip">{ai.writingModel}</small></h2>
+              <h2 className="plan-title"><I as={Sparkles} size={20} /> Cero te lo cuenta</h2>
               <p className="note">Cero te cuenta con sus propias palabras lo que entendió.</p>
               {cero.status === "done" && <div className="ai-reply"><Cero mood="curioso" decorative /><p className="bubble" data-testid="cero-ai-text">{cero.text}</p></div>}
               {cero.status === "error" && <p className="flash flash-error" role="alert">{cero.text}</p>}
@@ -976,14 +976,14 @@ export default function AlumnoCero() {
                   ? <><span className="spin"><I as={LoaderCircle} /></span> Cero está escribiendo…</>
                   : <><I as={MessageCircle} /> {cero.status === "done" ? "Pedir otra respuesta" : "Que Cero lo cuente"}</>}
               </button>
-              <p className="note small-print">Esto envía tu explicación a OpenRouter.</p>
+              <p className="note small-print">Para contarlo, Cero manda tu explicación por internet a un servicio externo.</p>
             </div>
           )}
           <div className="cta-row">
             <Btn cls="btn-primary btn-lg" onClick={actions.takeExam} testid="take-exam" disabled={busy === "exam"}>{busy === "exam" ? <>Cero está resolviendo… <I as={LoaderCircle} /></> : <>¡Que Cero haga el examen! <I as={ArrowRight} /></>}</Btn>
             <Btn cls="btn-secondary" onClick={() => go("teach")} disabled={busy === "exam"} testid="reflect-edit"><I as={PencilLine} /> Cambiar mi explicación</Btn>
           </div>
-          <p className="note" role="status" data-testid="exam-status">{busy === "exam" && <>Cero está resolviendo un problema nuevo con IA. Suele tardar menos de 20 s; si la IA no responde, uso el modo básico. <span aria-hidden="true">({elapsed} s)</span></>}</p>
+          <p className="note" role="status" data-testid="exam-status">{busy === "exam" && <>Cero está resolviendo un problema nuevo, usando solo lo que le enseñaste. Suele tardar menos de 20 segundos. <span aria-hidden="true">({elapsed} s)</span></>}</p>
         </section>
       );
     },
@@ -994,8 +994,8 @@ export default function AlumnoCero() {
       return (
         <section aria-labelledby="h-exam">
           <div className="cero-row cero-row-title"><Cero mood="pensando" cls="cero-lg" /><div><p className="kicker">Un problema que Cero nunca vio</p><h1 id="h-exam">El examen</h1></div></div>
-          {e.ai && <p className="note" data-testid="exam-ai-note"><I as={Sparkles} size={16} /> {e.provider === "webgpu" ? "Cero razonó con la IA de tu navegador usando solo tu explicación; la aritmética se verifica por separado." : "Cero razonó con IA en la nube usando solo tu explicación; la aritmética se verifica por separado."}</p>}
-          {e.fallback && <p className="note note-box" data-testid="exam-fallback">{e.why ? `La IA de tu navegador no pudo razonar esta vez (${e.why}), así que el examen usó el modo básico. El resultado sigue siendo válido.` : "La IA no dio un razonamiento verificable a tiempo, así que el examen usó el modo básico. El resultado sigue siendo válido."}</p>}
+          {e.ai && <p className="note" data-testid="exam-ai-note"><I as={Sparkles} size={16} /> Cero pensó cada paso usando solo tu explicación. Las cuentas las revisamos aparte para que estén bien hechas.</p>}
+          {e.fallback && <p className="note note-box" data-testid="exam-fallback"><span title={e.why || undefined}>Esta vez Cero resolvió el examen con las reglas del tema. El resultado sigue valiendo igual.</span></p>}
           <div className="exam-paper"><span className="tape tape-tc" aria-hidden="true" /><p>{v.context}</p><p className="exam-q"><strong>{v.question}</strong></p></div>
           <h2>Así lo resuelve Cero <small className="h-sub">(solo con lo que le enseñaste)</small></h2>
           <p className="note">{subject.exam.intro}</p>
@@ -1165,10 +1165,10 @@ export default function AlumnoCero() {
   const canJump = ["frictions", "prefs", "teach", "reflect"].includes(screen) && !busy;
   const footerNote = (
     <p>
-      <strong>{learner ? "Tu progreso está a salvo:" : "Tu progreso se queda aquí:"}</strong> {learner ? "tu plan, nivel, insignias y fichas se guardan en tu cuenta, y también en este dispositivo para usarlos sin internet." : "como invitado, se guarda solo en este navegador."}{" "}
+      <strong>{learner ? "Tu progreso está a salvo:" : "Tu progreso se queda aquí:"}</strong> {learner ? "tu nivel, tus insignias y tus fichas se guardan en tu cuenta, y también en este aparato para que puedas seguir sin internet." : "como invitado, se guarda solo en este aparato."}{" "}
       {learner
-        ? (ai.configured ? "Con tu plan, Cero envía tu texto o tu audio a OpenRouter (IA en la nube); sin internet usa la IA de tu navegador." : "La IA en la nube está apagada: Cero usa la IA de tu navegador.")
-        : "La IA corre en tu dispositivo: tus textos no salen de aquí."}
+        ? (ai.configured ? "Con tu plan, tu texto o tu voz viajan por internet a un servicio externo para que Cero los lea mejor; sin internet, Cero lee dentro de tu aparato." : "Cero lee dentro de tu aparato.")
+        : "Cero lee dentro de tu aparato: lo que escribes no sale de aquí."}
       {!storageOk && <span className="warn-inline"> Tu navegador no deja guardar: no podré recordar tu progreso.</span>}
     </p>
   );
@@ -1195,8 +1195,8 @@ export default function AlumnoCero() {
       {(!online || pendingSync > 0 || syncNote) && (
         <div className={`net-banner ${online ? "ok" : "off"}`} role="status" data-testid="net-banner">
           {!online
-            ? <>Sin conexión: tu avance se guarda en este dispositivo{learner ? " y se sincronizará cuando vuelva internet" : ""}. {localReady ? "Cero sigue leyéndote con la IA del navegador." : "Cero usa su modo básico."}</>
-            : pendingSync > 0 ? `Sincronizando ${pendingSync} ${pendingSync === 1 ? "cambio" : "cambios"} con tu cuenta…` : syncNote}
+            ? <>No tienes internet, pero puedes seguir: tu avance se guarda en este aparato{learner ? " y se subirá a tu cuenta cuando vuelva internet" : ""}. {localReady ? "Cero sigue leyéndote." : "Cero te leerá con las reglas del tema."}</>
+            : pendingSync > 0 ? `Guardando tu avance en tu cuenta (${pendingSync})…` : syncNote}
         </div>
       )}
       {!OFF_PATH.includes(screen) && (
