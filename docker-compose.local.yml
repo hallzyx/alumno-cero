@@ -1,0 +1,8 @@
+# Para probar la imagen en tu PC (publica el puerto y deja la cookie sin HTTPS):
+#   docker compose -f docker-compose.yml -f docker-compose.local.yml up --build
+services:
+  app:
+    ports:
+      - "${APP_PORT:-3000}:3000"
+    environment:
+      COOKIE_SECURE: "0"

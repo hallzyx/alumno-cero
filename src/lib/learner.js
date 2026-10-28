@@ -33,7 +33,7 @@ export async function startSession(learnerId) {
   const pool = await db();
   await pool.query("DELETE FROM auth_sessions WHERE expires_at < NOW()");
   await pool.query("INSERT INTO auth_sessions (token_hash, learner_id, expires_at) VALUES (?, ?, DATE_ADD(NOW(), INTERVAL ? DAY))", [sha(token), learnerId, DAYS]);
-  (await cookies()).set(COOKIE, token, { httpOnly: true, sameSite: "lax", path: "/", maxAge: 60 * 60 * 24 * DAYS });
+  (await cookies()).set(COOKIE, token, { httpOnly: true, sameSite: "lax", secure: process.env.COOKIE_SECURE === "1", path: "/", maxAge: 60 * 60 * 24 * DAYS });
 }
 
 export async function endSession() {

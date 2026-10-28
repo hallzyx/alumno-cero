@@ -1,0 +1,45 @@
+# Alumno Cero + MariaDB, listo para Dokploy (tipo "Docker Compose").
+# En Dokploy: crea el servicio desde este repo, carga las variables de .env.example en la pestaña
+# "Environment" y, en "Domains", apunta tu dominio al servicio `app` en el puerto 3000.
+# No se publican puertos: Traefik (Dokploy) enruta el dominio hacia el contenedor.
+
+services:
+  db:
+    image: mariadb:10.11
+    restart: unless-stopped
+    environment:
+      MARIADB_ROOT_PASSWORD: ${DB_PASSWORD:?Define DB_PASSWORD}
+      MARIADB_DATABASE: ${DB_NAME:-alumno_cero}
+    volumes:
+      - db-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      OPENROUTER_VOICE_MODEL: ${OPENROUTER_VOICE_MODEL:-google/gemini-2.5-flash}
+      OPENROUTER_WRITING_MODEL: ${OPENROUTER_WRITING_MODEL:-anthropic/claude-sonnet-4.5}
+      OPENROUTER_SITE_URL: ${OPENROUTER_SITE_URL:-http://localhost:3000}
+      OPENROUTER_APP_NAME: ${OPENROUTER_APP_NAME:-Alumno Cero}
+      DB_HOST: db
+      DB_PORT: "3306"
+      DB_USER: root
+      DB_PASSWORD: ${DB_PASSWORD:?Define DB_PASSWORD}
+      DB_NAME: ${DB_NAME:-alumno_cero}
+      # 1 = la cookie de sesión solo viaja por HTTPS (lo normal con un dominio en Dokploy). Pon 0 si pruebas por http.
+      COOKIE_SECURE: ${COOKIE_SECURE:-1}
+    expose:
+      - "3000"
+
+volumes:
+  db-data:

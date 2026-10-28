@@ -100,6 +100,15 @@ npm test                 # pruebas del motor, de los planes, de la cola sin cone
 npm run build && npm start
 ```
 
+### Docker y Dokploy
+
+`docker-compose.yml` levanta la app (imagen `Dockerfile`, Next.js standalone) y una base MariaDB con volumen propio; las tablas se crean solas.
+
+1. En Dokploy crea un servicio **Docker Compose** desde este repo (rama `main`).
+2. En **Environment** carga las variables de `.env.example`: `DB_PASSWORD` es obligatoria (clave root de MariaDB); `OPENROUTER_API_KEY` y los modelos son opcionales (sin key, la IA en la nube queda apagada). Pon `OPENROUTER_SITE_URL` con tu dominio.
+3. En **Domains** apunta tu dominio al servicio `app`, puerto `3000` (con HTTPS: la cookie de sesión es `Secure` por defecto; `COOKIE_SECURE=0` solo para probar por http).
+4. Probar en tu PC: `docker compose -f docker-compose.yml -f docker-compose.local.yml up --build` (necesita `DB_PASSWORD` en el entorno o en `.env`) y abre http://localhost:3000.
+
 Estructura: `src/app` (páginas y rutas `api/`), `src/components` (UI React), `src/lib` (motor, temas, almacenamiento, cliente OpenRouter, grabación de audio), `public` (fuentes y manifest).
 Variables en `.env`: `OPENROUTER_API_KEY`, `OPENROUTER_VOICE_MODEL`, `OPENROUTER_WRITING_MODEL`. El modelo de voz debe aceptar audio de entrada.
 
