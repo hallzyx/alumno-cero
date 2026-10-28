@@ -7,7 +7,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "test": "node --test tests/engine.test.mjs tests/offline.test.mjs"
+    "test": "node --test tests/engine.test.mjs tests/offline.test.mjs tests/ai.test.mjs"
   },
   "dependencies": {
     "@fontsource-variable/fredoka": "^5.3.0",
