@@ -15,7 +15,8 @@ self.addEventListener("install", (event) => {
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys()
-      .then((keys) => Promise.all(keys.filter((k) => !k.startsWith(VERSION)).map((k) => caches.delete(k))))
+      // Only our own old versions: the in-browser AI model (~1 GB) lives in WebLLM's caches of this same origin.
+      .then((keys) => Promise.all(keys.filter((k) => k.startsWith("ac-") && !k.startsWith(VERSION)).map((k) => caches.delete(k))))
       .then(() => self.clients.claim()),
   );
 });

@@ -91,7 +91,7 @@ function loadSW() {
   vm.runInNewContext(readFileSync(new URL("../public/sw.js", import.meta.url), "utf8"), { self, caches, fetch, Response, URL, Promise });
   const run = (event) => { let p; handlers[event.type]({ ...event, waitUntil: (x) => { p = x; }, respondWith: (x) => { p = x; } }); return p; };
   const req = (path, mode = "cors") => ({ url: `http://x${path}`, method: "GET", mode });
-  return { state, run, req };
+  return { state, run, req, caches };
 }
 
 test("service worker: the app shell and assets are served without a connection", async () => {
@@ -114,4 +114,11 @@ test("service worker: never touches the API or other methods", () => {
   // The handler returns early (no respondWith), so the harness gets no promise back.
   assert.equal(sw.run({ type: "fetch", request: { ...sw.req("/api/state"), method: "PUT" } }), undefined);
   assert.equal(sw.run({ type: "fetch", request: sw.req("/api/hub") }), undefined);
+});
+
+test("service worker: an update drops only its own old caches, never the in-browser AI model", async () => {
+  const sw = loadSW();
+  for (const name of ["ac-v0-shell", "ac-v0-assets", "webllm/model", "webllm/config", "webllm/wasm"]) await sw.caches.open(name);
+  await sw.run({ type: "activate" });
+  assert.deepEqual((await sw.caches.keys()).sort(), ["webllm/config", "webllm/model", "webllm/wasm"]);
 });
