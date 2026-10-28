@@ -32,8 +32,8 @@ export default function PlansScreen({ account, forced = false, onPlanSet, onSign
       <CeroSays mood="curioso">{account ? (forced ? "Para seguir, elige el plan de tu cuenta." : "Aquí puedes ver o cambiar tu plan.") : "Elige un plan y crea tu cuenta."}</CeroSays>
       <h1 id="h-plans-screen">{account ? "Mi plan" : "Planes"} <DemoTag /></h1>
       <p className="lead">{forced
-        ? "Tu cuenta todavía no tiene un plan. Elígelo para usar la IA en la nube, el dictado por voz y la sincronización."
-        : "Los planes incluyen IA en la nube, dictado por voz y progreso sincronizado. Es una demostración: no se cobra nada."}</p>
+        ? "Tu cuenta todavía no tiene un plan. Elígelo para hablarle a Cero con tu voz y guardar tu avance en tu cuenta."
+        : "Los planes incluyen hablarle a Cero con tu voz, una lectura más precisa y tu progreso guardado en tu cuenta. Es una demostración: no se cobra nada."}</p>
       {current && <p className="note note-box">Tu plan actual: <strong>{planOf(current)?.name}</strong>.</p>}
       <div className="plan-grid plan-grid-3">
         {PLAN_LIST.map((p) => (

@@ -38,9 +38,9 @@ export function PlanCard({ plan, onChoose, ctaLabel, current = false, selected =
 const ROWS = [
   ["Escribir tus explicaciones", true, true, true, true],
   ["Dictado por voz", false, true, true, true],
-  ["IA que corre en tu navegador (WebGPU)", true, true, true, true],
-  ["IA en la nube, más precisa", false, true, true, true],
-  ["Progreso guardado en tu cuenta y sincronizado", "Solo en tu dispositivo", true, true, true],
+  ["Cero lee dentro de tu aparato (sin mandar nada por internet)", true, true, true, true],
+  ["Cero entiende mejor lo que explicas", false, true, true, true],
+  ["Progreso guardado en tu cuenta", "Solo en tu aparato", true, true, true],
   ["Funciona sin internet", true, true, true, true],
   ["Varios estudiantes con perfil propio", false, false, "Hasta 4", "Alumnos por aula"],
   ["Aulas y panel docente", false, false, false, true],
@@ -68,7 +68,7 @@ export function Pricing({ onGuest, onChoose }) {
   return (
     <section className="lp-section" id="planes" aria-labelledby="h-plans" data-testid="pricing">
       <h2 id="h-plans" className="lp-h2">Planes <DemoTag /></h2>
-      <p className="lead">Prueba gratis como invitado. Si quieres guardar tu progreso en la nube, estudiar con varios hijos o llevarlo al aula, elige un plan. <strong>Es una vista de demostración: no hay cobro real.</strong></p>
+      <p className="lead">Prueba gratis como invitado. Si quieres guardar tu progreso en tu cuenta, estudiar con varios hijos o llevarlo al aula, elige un plan. <strong>Es una vista de demostración: no hay cobro real.</strong></p>
       <div className="plan-grid">
         <PlanCard plan={GUEST} ctaLabel="Probar ahora" onChoose={() => onGuest()} />
         {PLAN_LIST.map((p) => <PlanCard key={p.id} plan={p} onChoose={onChoose} ctaLabel={p.id === "colegio" ? "Solicitar demo" : undefined} />)}
@@ -77,7 +77,7 @@ export function Pricing({ onGuest, onChoose }) {
         <summary>Comparar los planes en una tabla</summary>
         <PlanTable />
       </details>
-      <p className="note">Por qué hay planes: la IA en la nube cuesta dinero por cada uso, así que se incluye en los planes. Como invitado, la IA corre en tu propio dispositivo y la educación sigue siendo accesible aunque no tengas internet.</p>
+      <p className="note">Por qué hay planes: el cerebro grande de Cero, el que vive en internet, cuesta dinero cada vez que se usa, así que va incluido en los planes. Como invitado, Cero lee dentro de tu propio aparato, y aprender sigue siendo posible aunque no tengas internet.</p>
     </section>
   );
 }
@@ -95,7 +95,7 @@ export function MockCheckout({ plan, onConfirm, busy = false, confirmLabel = "Co
       <dl className="checkout-lines">
         <div><dt>Plan</dt><dd>{p.name} · {p.tagline}</dd></div>
         <div><dt>Precio</dt><dd>{p.priceText} <small>{p.priceNote}</small></dd></div>
-        <div><dt>Hoy pagas</dt><dd><strong>S/ 0</strong> <small>(demostración)</small></dd></div>
+        <div><dt>Hoy pagas</dt><dd><strong>$ 0 COP</strong> <small>(demostración)</small></dd></div>
       </dl>
       <label className="keep-box">
         <input type="checkbox" checked={ok} onChange={(e) => setOk(e.target.checked)} data-testid="checkout-ack" />
