@@ -27,6 +27,7 @@ import LocalAICard, { useLocalAI } from "./LocalAICard";
 import { capabilities, planOf } from "@/lib/plans";
 import { cacheAccount, cachedAccount, flushOutbox, forgetAccount, outboxSize, queueEvent, queueState, registerServiceWorker } from "@/lib/offline";
 import { cloudAnalysis, cloudExam, webgpuAnalysis, webgpuExam } from "@/lib/ai-client";
+import { getSnapshot as localAISnapshot } from "@/lib/webllm";
 import { Cero, CeroSays } from "./Cero";
 
 const STEPS = ["welcome", "auth", "hub", "goal", "frictions", "prefs", "teach", "reading", "reflect", "exam", "result", "practice", "card", "notfound", "plans", "family", "classes"];
@@ -385,6 +386,7 @@ export default function AlumnoCero() {
     set({ analysis: basic, exam: null });
     go("reading");
     let analysis = null;
+    let why = null; // why the in-browser AI could not be used, to tell the learner
     const wait = new Promise((res) => setTimeout(res, 900));
     if (cloudAvailable) {
       setBusyEngine("cloud");
@@ -396,12 +398,13 @@ export default function AlumnoCero() {
     if (!analysis && localReady) {
       setBusyEngine("webgpu");
       try { analysis = await webgpuAnalysis(topic, text, state.level); } catch { /* fall through to the basic engine */ }
+      if (!analysis) why = localAISnapshot().lastError ?? "no respondió";
     }
     await wait;
     pending.current = false;
     setBusy(null);
     setBusyEngine(null);
-    set({ analysis: analysis ?? { ...basic, log: { ...basic.log, fallback: true } } });
+    set({ analysis: analysis ?? { ...basic, log: { ...basic.log, fallback: true, why } } });
     go("reflect");
   }
 
@@ -528,6 +531,7 @@ export default function AlumnoCero() {
       if (!wantsAI) { set({ exam: basic() }); return go("exam"); }
       setBusy("exam");
       let exam = null;
+      let why = null;
       if (cloudAvailable) {
         setBusyEngine("cloud");
         const ctl = new AbortController();
@@ -538,10 +542,11 @@ export default function AlumnoCero() {
       if (!exam && localReady) {
         setBusyEngine("webgpu");
         try { exam = await webgpuExam(topic, variant, state.analysis, state.text); } catch { /* fall through */ }
+        if (!exam) why = localAISnapshot().lastError ?? "no respondió";
       }
       setBusy(null);
       setBusyEngine(null);
-      set({ exam: exam ?? { ...basic(), fallback: true } });
+      set({ exam: exam ?? { ...basic(), fallback: true, why } });
       go("exam");
     },
     seeResult: () => {
@@ -934,7 +939,7 @@ export default function AlumnoCero() {
         <section aria-labelledby="h-reflect">
           <div className="cero-row cero-row-title"><Cero mood={qs.length ? "curioso" : "feliz"} cls="cero-lg" /><h1 id="h-reflect">Esto es lo que entendí</h1></div>
           {state.analysis.log?.ai && <p className="note" data-testid="ai-note"><I as={Sparkles} size={16} /> {state.analysis.log.provider === "webgpu" ? "Analizado con la IA de tu navegador (WebGPU): tu texto no salió de este dispositivo. Cada cita se verifica palabra por palabra." : `Analizado con IA en la nube (${ai.writingModel}). Cero escribió lo que entendió y sus dudas con IA, usando solo tus frases (cada cita se verifica palabra por palabra).`}</p>}
-          {state.analysis.log?.fallback && <p className="note note-box" data-testid="ai-fallback">La IA no respondió a tiempo (o no respondió bien), así que usé el análisis básico de tu equipo. Puedes seguir igual.</p>}
+          {state.analysis.log?.fallback && <p className="note note-box" data-testid="ai-fallback">{state.analysis.log.why ? `La IA de tu navegador no pudo leerte esta vez (${state.analysis.log.why}), así que usé el análisis básico de tu equipo. Puedes seguir igual.` : "La IA no respondió a tiempo (o no respondió bien), así que usé el análisis básico de tu equipo. Puedes seguir igual."}</p>}
           {!state.analysis.log?.ai && !state.analysis.log?.fallback && <p className="note" data-testid="basic-note">Cero te leyó con su modo básico: reglas del tema, sin IA.</p>}
           <ul className="understood" data-testid="understood">
             {refl.map((r) => (
@@ -990,7 +995,7 @@ export default function AlumnoCero() {
         <section aria-labelledby="h-exam">
           <div className="cero-row cero-row-title"><Cero mood="pensando" cls="cero-lg" /><div><p className="kicker">Un problema que Cero nunca vio</p><h1 id="h-exam">El examen</h1></div></div>
           {e.ai && <p className="note" data-testid="exam-ai-note"><I as={Sparkles} size={16} /> {e.provider === "webgpu" ? "Cero razonó con la IA de tu navegador usando solo tu explicación; la aritmética se verifica por separado." : "Cero razonó con IA en la nube usando solo tu explicación; la aritmética se verifica por separado."}</p>}
-          {e.fallback && <p className="note note-box" data-testid="exam-fallback">La IA no dio un razonamiento verificable a tiempo, así que el examen usó el modo básico. El resultado sigue siendo válido.</p>}
+          {e.fallback && <p className="note note-box" data-testid="exam-fallback">{e.why ? `La IA de tu navegador no pudo razonar esta vez (${e.why}), así que el examen usó el modo básico. El resultado sigue siendo válido.` : "La IA no dio un razonamiento verificable a tiempo, así que el examen usó el modo básico. El resultado sigue siendo válido."}</p>}
           <div className="exam-paper"><span className="tape tape-tc" aria-hidden="true" /><p>{v.context}</p><p className="exam-q"><strong>{v.question}</strong></p></div>
           <h2>Así lo resuelve Cero <small className="h-sub">(solo con lo que le enseñaste)</small></h2>
           <p className="note">{subject.exam.intro}</p>

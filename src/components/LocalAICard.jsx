@@ -30,7 +30,7 @@ export default function LocalAICard({ audience = "guest", declined = false, onDe
       {!ai.checked && <p className="note">Revisando si tu dispositivo puede correr la IA…</p>}
 
       {ai.checked && !ai.supported && (
-        <p className="note"><TriangleAlert size={18} strokeWidth={2.4} aria-hidden="true" className="ico" /> Este navegador no tiene WebGPU, así que Cero leerá tu explicación con su <strong>modo básico</strong> (sin IA), que también funciona sin internet. Para la IA del navegador prueba con Chrome o Edge recientes en un equipo con GPU.</p>
+        <p className="note"><TriangleAlert size={18} strokeWidth={2.4} aria-hidden="true" className="ico" /> Este navegador no tiene WebGPU, así que Cero leerá tu explicación con su <strong>modo básico</strong> (sin IA), que también funciona sin internet. Para la IA del navegador prueba con Chrome o Edge recientes en un equipo con GPU.{ai.gpuWhy && <> <span data-testid="local-ai-why">Motivo: {ai.gpuWhy}.</span></>}</p>
       )}
 
       {ai.checked && ai.supported && ready && (
